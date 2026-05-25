@@ -19,13 +19,28 @@
 
 - timestamp: 2026-05-25T14:12:00-05:00
 - scenario: On-demand topic cloud rendering after repositories are already loaded.
-- method: Canvas renderer caps the cloud at 220 topics, scales font size by logarithmic topic frequency, and places words inside a 960x620 silhouette mask using sampled mask collision checks and rectangular word hitboxes.
+- method: Canvas renderer caps the cloud at 500 topics, scales font size by logarithmic topic frequency, and places words inside a 1440x960 silhouette mask using sampled mask collision checks and rectangular word hitboxes.
 - environment: Windows, static GitHub Pages app.
 - startup time: Not affected; cloud is hidden and uncomputed by default.
 - latency: Static syntax/build and HTTP validation passed; interactive public Pages validation is run after deployment.
-- job duration: Bounded by 220 topic render cap and 1,400 placement attempts per topic.
+- job duration: Bounded by 500 topic render cap and 5,200 placement attempts per topic.
 - memory: Stores only drawn word hitboxes for click handling.
 - CPU: Cloud work occurs only after the user clicks `Build topic cloud`.
 - event-loop lag: Placement is bounded by topic cap and per-word placement attempts.
 - validation: `pnpm pages:check`, `pnpm check`, `pnpm build`, local static HTTP verification, public Pages HTTP verification, and deployed canvas click verification passed.
+
+## github-pages-larger-topic-cloud-20260525
+
+- timestamp: 2026-05-25T14:36:00-05:00
+- scenario: Larger on-demand shaped topic cloud for dense topic sets.
+- method: Increased canvas from 960x620 to 1440x960, reduced logarithmic font range from 13-55 px to 8-36 px, raised topic cap from 220 to 500, relaxed mask sampling to require 82 percent of sampled points inside the shape, and tightened collision gap to 1 px.
+- environment: Windows, static GitHub Pages app.
+- startup time: Not affected; cloud remains hidden until requested.
+- latency: Static syntax/build and local HTTP validation passed.
+- job duration: Placement remains bounded by 500 topic cap and 5,200 attempts per topic.
+- memory: Stores drawn word hitboxes only for click handling.
+- CPU: Cloud work still occurs only after the user clicks `Build topic cloud`.
+- event-loop lag: More topics can draw than the prior version, with user-visible placed/total status.
+- validation: `pnpm pages:check`, `pnpm check`, `pnpm build`, and local static HTTP verification passed.
+- risks: Browser canvas rendering may still skip words that cannot fit, but it now uses a larger surface and smaller text.
 - risks: Very low-frequency topics can be omitted when they do not fit in the bounded silhouette.

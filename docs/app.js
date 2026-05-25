@@ -4,10 +4,10 @@ const databaseName = "github-star-search"
 const repoStoreName = "repo-cache"
 const initialRenderLimit = 100
 const renderBatchSize = 100
-const maxTopicCloudItems = 220
-const topicCloudWidth = 960
-const topicCloudHeight = 620
-const topicCloudPadding = 22
+const maxTopicCloudItems = 500
+const topicCloudWidth = 1440
+const topicCloudHeight = 960
+const topicCloudPadding = 14
 
 const sampleRepos = [
   {
@@ -680,7 +680,7 @@ function renderTopicCloud() {
 
   drawTopicCloud()
   elements.topicCloud.hidden = false
-  elements.topicCloudCount.textContent = `${state.topicCounts.length.toLocaleString()} topics`
+  elements.topicCloudCount.textContent = `${state.topicWordHitboxes.length.toLocaleString()} of ${state.topicCounts.length.toLocaleString()} topics`
   elements.topicCloudButton.textContent = "Rebuild topic cloud"
 }
 
@@ -708,12 +708,12 @@ function drawTopicCloud() {
 
   for (const item of words) {
     const fontSize = scaleTopicFont(item.count, minCount, maxCount)
-    const angle = item.topic.length > 13 && placed.length % 4 === 0 ? -Math.PI / 2 : 0
-    const fontWeight = item.count > maxCount * 0.35 ? 850 : 760
+    const angle = item.topic.length > 16 && placed.length % 5 === 0 ? -Math.PI / 2 : 0
+    const fontWeight = item.count > maxCount * 0.35 ? 820 : 720
     context.font = `${fontWeight} ${fontSize}px Inter, Segoe UI, sans-serif`
     const metrics = context.measureText(item.topic)
-    const width = Math.ceil(metrics.width) + 8
-    const height = Math.ceil(fontSize * 1.18)
+    const width = Math.ceil(metrics.width) + 4
+    const height = Math.ceil(fontSize * 1.05)
     const box = findWordPlacement(mask, placed, width, height, angle)
 
     if (!box) {
@@ -743,11 +743,11 @@ function drawTopicCloud() {
 
 function scaleTopicFont(count, minCount, maxCount) {
   if (maxCount === minCount) {
-    return 28
+    return 18
   }
 
   const normalized = (Math.log(count + 1) - Math.log(minCount + 1)) / (Math.log(maxCount + 1) - Math.log(minCount + 1))
-  return Math.round(13 + normalized * 42)
+  return Math.round(8 + normalized * 28)
 }
 
 function buildTopicCloudMask(width, height) {
@@ -791,20 +791,20 @@ function buildTopicCloudMask(width, height) {
 
 function findWordPlacement(mask, placed, width, height, angle) {
   const centerX = topicCloudWidth * 0.52
-  const centerY = topicCloudHeight * 0.43
+  const centerY = topicCloudHeight * 0.46
   const rotatedWidth = angle === 0 ? width : height
   const rotatedHeight = angle === 0 ? height : width
-  const maxRadius = Math.max(topicCloudWidth, topicCloudHeight) * 0.58
+  const maxRadius = Math.max(topicCloudWidth, topicCloudHeight) * 0.7
 
-  for (let step = 0; step < 1400; step++) {
-    const theta = step * 0.42
-    const radius = 3.4 * Math.sqrt(step)
+  for (let step = 0; step < 5200; step++) {
+    const theta = step * 0.47
+    const radius = 2.7 * Math.sqrt(step)
     if (radius > maxRadius) {
       break
     }
 
     const cx = centerX + Math.cos(theta) * radius
-    const cy = centerY + Math.sin(theta) * radius * 0.72
+    const cy = centerY + Math.sin(theta) * radius * 0.78
     const box = {
       cx,
       cy,
@@ -832,24 +832,27 @@ function isInsideTopicMask(mask, box) {
     return false
   }
 
-  const samplesX = Math.max(3, Math.ceil(box.width / 28))
-  const samplesY = Math.max(3, Math.ceil(box.height / 22))
+  const samplesX = Math.max(2, Math.ceil(box.width / 34))
+  const samplesY = Math.max(2, Math.ceil(box.height / 28))
+  let inside = 0
+  let total = 0
   for (let yIndex = 0; yIndex <= samplesY; yIndex++) {
     for (let xIndex = 0; xIndex <= samplesX; xIndex++) {
       const x = Math.round(box.x + (box.width * xIndex) / samplesX)
       const y = Math.round(box.y + (box.height * yIndex) / samplesY)
       const alphaIndex = (y * topicCloudWidth + x) * 4 + 3
-      if (mask[alphaIndex] === 0) {
-        return false
+      total += 1
+      if (mask[alphaIndex] > 0) {
+        inside += 1
       }
     }
   }
 
-  return true
+  return inside / total >= 0.82
 }
 
 function intersectsPlacedWords(box, placed) {
-  const gap = 3
+  const gap = 1
   return placed.some(
     (item) =>
       box.x < item.x + item.width + gap &&

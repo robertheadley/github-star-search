@@ -329,14 +329,16 @@ button:disabled {
 
 .topic-panel {
   grid-column: 1 / -1;
+  margin-inline: calc(clamp(16px, 4vw, 56px) * -0.5);
 }
 
 .topic-cloud-canvas {
   display: block;
   inline-size: 100%;
-  max-inline-size: 960px;
+  max-inline-size: 1440px;
   block-size: auto;
   margin-top: 16px;
+  margin-inline: auto;
   border: 1px solid var(--border);
   border-radius: 8px;
   background: #ffffff;
