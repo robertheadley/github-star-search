@@ -51,11 +51,11 @@
 - method: Scan cached repositories for similar repos, topic co-occurrence pairs, language/topic clusters, owner/topic concentrations, and popular topic searches.
 - environment: Windows, static GitHub Pages app.
 - startup time: Not affected; correlations are off until requested.
-- latency: Local validation passed; deployed interaction validation pending.
+- latency: Local validation and deployed interaction validation passed.
 - job duration: Bounded by loaded repository count and per-repository topic cap of 30 for pair generation.
 - memory: Uses temporary maps for counts and renders a small set of top suggestions.
 - CPU: Correlation work occurs only after the user clicks `Find correlations`.
 - event-loop lag: Correlations are rendered as small summary lists instead of large canvases or thousands of DOM nodes.
-- validation: `pnpm pages:check`, `pnpm check`, `pnpm build`, and local HTTP verification passed.
+- validation: `pnpm pages:check`, `pnpm check`, `pnpm build`, local HTTP verification, public Pages HTTP verification, and deployed browser interaction verification passed.
 - risks: Correlation ranking is metadata-only and does not inspect repository code contents.
 - risks: Very low-frequency topics can be omitted when they do not fit in the bounded silhouette.

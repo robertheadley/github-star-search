@@ -55,7 +55,7 @@
 - why: The shaped word cloud did not provide a useful experience for very large topic sets.
 - components: `docs/app.js`, `docs/index.html`, `docs/styles.css`, `README.md`, `docs/ROADMAP.md`
 - type: feature replacement
-- validation: `pnpm pages:check`, `pnpm check`, `pnpm build`, and local HTTP verification passed; deployed Pages verification pending.
+- validation: `pnpm pages:check`, `pnpm check`, `pnpm build`, local HTTP verification, public Pages HTTP verification, and deployed browser interaction verification passed.
 - performance: Correlations are computed only when requested and summarize top signals instead of rendering thousands of topics.
 - risks: Correlations are metadata-based and should be treated as suggestions, not semantic code/content understanding.
 - follow_up: Add persisted saved correlation reports if users want to compare snapshots over time.
