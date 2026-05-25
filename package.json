@@ -1,0 +1,31 @@
+{
+  "name": "github-star-search",
+  "version": "0.1.0",
+  "description": "Search GitHub starred repositories without cloning them.",
+  "private": false,
+  "type": "module",
+  "bin": {
+    "github-star-search": "dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsx src/index.ts",
+    "stars:sync": "tsx src/index.ts sync",
+    "stars:search": "tsx src/index.ts search",
+    "stars:code": "tsx src/index.ts code",
+    "check": "tsc -p tsconfig.json --noEmit"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.7",
+    "yargs": "^17.7.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.5",
+    "@types/yargs": "^17.0.33",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  }
+}
