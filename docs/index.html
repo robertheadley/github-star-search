@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="Search GitHub starred repositories from a static GitHub Pages app."
+    />
+    <title>GitHub Star Search</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <header class="app-header">
+      <div>
+        <p class="eyebrow">GitHub Pages star search</p>
+        <h1>Search your GitHub stars</h1>
+        <p class="header-copy">
+          Load starred repositories from GitHub, then search names, owners,
+          descriptions, languages, topics, and dates in your browser.
+        </p>
+      </div>
+      <a class="github-link" href="https://github.com/robertheadley/github-star-search">View source</a>
+    </header>
+
+    <main class="app-shell">
+      <section class="panel setup-panel" aria-labelledby="setup-heading">
+        <div class="section-heading">
+          <h2 id="setup-heading">Load Stars</h2>
+          <span id="connection-status" class="status-pill">Not loaded</span>
+        </div>
+
+        <form id="load-form" class="load-form">
+          <label>
+            GitHub username
+            <input
+              id="username"
+              name="username"
+              autocomplete="username"
+              placeholder="octocat"
+              required
+            />
+          </label>
+
+          <label>
+            Optional token
+            <input
+              id="token"
+              name="token"
+              autocomplete="off"
+              type="password"
+              placeholder="Optional; raises GitHub API limits"
+            />
+          </label>
+
+          <div class="form-actions">
+            <button id="load-button" type="submit">Load starred repos</button>
+            <button id="sample-button" class="secondary-button" type="button">Try sample data</button>
+          </div>
+        </form>
+
+        <div id="progress" class="progress" role="status" aria-live="polite">
+          Enter a username to fetch public starred repositories. Add a token
+          only when you need higher GitHub API limits.
+        </div>
+      </section>
+
+      <section class="panel search-panel" aria-labelledby="search-heading">
+        <div class="section-heading">
+          <h2 id="search-heading">Search</h2>
+          <span id="result-count" class="status-pill">0 results</span>
+        </div>
+
+        <div class="search-grid">
+          <label class="wide">
+            Query
+            <input id="query" placeholder="react cli topic:mcp language:TypeScript" />
+          </label>
+
+          <label>
+            Language
+            <select id="language">
+              <option value="">Any language</option>
+            </select>
+          </label>
+
+          <label>
+            Topic
+            <select id="topic">
+              <option value="">Any topic</option>
+            </select>
+          </label>
+
+          <label>
+            Sort
+            <select id="sort">
+              <option value="best">Best match</option>
+              <option value="stars">Most stars</option>
+              <option value="updated">Recently updated</option>
+              <option value="starred">Recently starred</option>
+              <option value="name">Name</option>
+            </select>
+          </label>
+        </div>
+
+        <div class="filters">
+          <label><input id="include-archived" type="checkbox" /> Include archived</label>
+          <label><input id="forks-only" type="checkbox" /> Forks only</label>
+          <label><input id="hide-forks" type="checkbox" /> Hide forks</label>
+        </div>
+
+        <div class="toolbar">
+          <button id="export-button" class="secondary-button" type="button" disabled>Export JSON</button>
+          <label class="import-button">
+            Import JSON
+            <input id="import-input" type="file" accept="application/json,.json" />
+          </label>
+          <button id="clear-button" class="secondary-button danger-button" type="button" disabled>Clear cache</button>
+        </div>
+      </section>
+
+      <section class="results-region" aria-labelledby="results-heading">
+        <h2 id="results-heading" class="visually-hidden">Results</h2>
+        <div id="results" class="results empty-state">
+          Load stars to begin searching.
+        </div>
+      </section>
+    </main>
+
+    <template id="repo-template">
+      <article class="repo-card">
+        <div class="repo-main">
+          <a class="repo-name" target="_blank" rel="noreferrer"></a>
+          <p class="repo-description"></p>
+          <div class="topics"></div>
+        </div>
+        <dl class="repo-meta">
+          <div><dt>Language</dt><dd class="repo-language"></dd></div>
+          <div><dt>Stars</dt><dd class="repo-stars"></dd></div>
+          <div><dt>Updated</dt><dd class="repo-updated"></dd></div>
+        </dl>
+      </article>
+    </template>
+
+    <script src="./app.js" defer></script>
+  </body>
+</html>

@@ -49,7 +49,10 @@ export class GitHubClient {
     let nextUrl: string | null = `${this.config.apiBaseUrl}/user/starred?per_page=100&sort=updated&direction=desc`
 
     while (nextUrl) {
-      const { data, nextUrl: next } = await this.request<GitHubStarredRepoResponse[]>(nextUrl)
+      const response: { data: GitHubStarredRepoResponse[]; nextUrl: string | null } =
+        await this.request<GitHubStarredRepoResponse[]>(nextUrl)
+      const data = response.data
+      const next: string | null = response.nextUrl
       for (const repo of data) {
         repos.push({
           id: repo.id,

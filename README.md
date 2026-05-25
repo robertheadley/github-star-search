@@ -1,17 +1,54 @@
 # GitHub Star Search
 
-A Windows-friendly TypeScript CLI for searching your GitHub starred repositories without cloning thousands of repos.
+A GitHub Pages app and Windows-friendly TypeScript CLI for searching starred
+repositories without cloning thousands of repos.
 
 ## What it does
 
+- Runs as a static `github.io` search app from the `docs/` folder.
+- Fetches starred repositories directly from GitHub in the browser.
+- Searches star metadata locally after loading: name, owner, description,
+  language, topics, dates, and URL.
+- Supports browser cache, JSON export, and JSON import.
 - Syncs your starred repositories from GitHub into a local cache.
-- Searches cached star metadata locally: name, owner, description, language, topics, URL.
 - Searches code remotely through GitHub's API, one starred repo at a time, so repositories do not need to be cloned.
 - Saves machine-readable JSON results for later filtering or import into other tools.
 
 ## Why this exists
 
-GitHub lets you search stars by repository metadata in the UI, but it does not give you a simple local index of all starred repository contents. Cloning thousands of starred repositories is slow, wasteful, and hard to maintain. This tool starts with a safer API-first approach.
+GitHub lets you view starred repositories, but it does not provide a focused
+public search app for quickly filtering all of a user's stars by repository
+metadata. Cloning thousands of starred repositories is slow, wasteful, and hard
+to maintain. This project uses GitHub's API first, then searches locally in the
+browser or CLI.
+
+## GitHub Pages app
+
+The static app lives in `docs/`:
+
+```text
+docs/index.html
+docs/styles.css
+docs/app.js
+```
+
+To publish it on GitHub Pages:
+
+1. Open the repository settings on GitHub.
+2. Go to **Pages**.
+3. Set **Source** to **Deploy from a branch**.
+4. Set **Branch** to `main` and folder to `/docs`.
+5. Save. GitHub will publish the app at the repository's Pages URL.
+
+### Browser privacy model
+
+- Star metadata is fetched from `https://api.github.com`.
+- Search runs locally in the browser after loading stars.
+- The optional token is used only for GitHub API requests in the current page
+  and is intended for higher API limits.
+- Fully private-star access needs a future OAuth/device-flow implementation.
+- Repository metadata can be cached in browser `localStorage`.
+- Tokens are not written to the repository, exported JSON, or local cache.
 
 ## Requirements
 
@@ -28,6 +65,7 @@ pnpm install
 copy .env.example .env
 notepad .env
 pnpm build
+pnpm pages:check
 pnpm stars:sync
 pnpm stars:search "mcp"
 pnpm stars:code "createServer" -- --limit-repos 25
@@ -82,4 +120,7 @@ out/code-search-results.json
 
 ## Current status
 
-Starter CLI scaffold. The next useful features are SQLite indexing, resumable code search, rate-limit-aware queueing, and optional README/file-content sampling through GitHub Contents API.
+Static GitHub Pages app plus starter CLI scaffold. The next useful features are
+OAuth/device-flow sign-in, SQLite indexing for the CLI, resumable code search,
+rate-limit-aware queueing, and optional README/file-content sampling through
+GitHub Contents API.

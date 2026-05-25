@@ -24,7 +24,19 @@
 - [ ] Add rate-limit-aware scheduling.
 - [ ] Add failure cache to avoid retry loops.
 
-## Phase 4: Local web UI
+## Phase 4: GitHub Pages search portal
+
+- [x] Add a static GitHub Pages app under `docs/`.
+- [x] Load public starred repositories by username.
+- [x] Add optional token support for higher GitHub API limits.
+- [x] Add instant in-browser metadata search.
+- [x] Add filters for language, topic, archived repos, and forks.
+- [x] Add browser cache, JSON export, and JSON import.
+- [ ] Add OAuth/device-flow design for non-technical users and private-star access.
+- [ ] Document GitHub API limits in the app UI.
+- [ ] Add privacy-first architecture notes.
+
+## Phase 5: Local web UI
 
 - [ ] Add a local-only web interface.
 - [ ] Add instant metadata search.
@@ -32,7 +44,7 @@
 - [ ] Add repo detail drawer.
 - [ ] Add code search job history.
 
-## Phase 5: GitHub Pages search portal
+## Phase 6: Advanced hosted search
 
 A public GitHub Pages app can search a user's stars only after the user authenticates with GitHub. It should not require users to enter many API keys.
 
