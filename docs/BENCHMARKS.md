@@ -41,6 +41,6 @@
 - memory: Stores drawn word hitboxes only for click handling.
 - CPU: Cloud work still occurs only after the user clicks `Build topic cloud`.
 - event-loop lag: More topics can draw than the prior version, with user-visible placed/total status.
-- validation: `pnpm pages:check`, `pnpm check`, `pnpm build`, and local static HTTP verification passed. Built-in sample data now includes 720 generated repositories and 360 generated topics for repeatable public Pages cloud testing. The page contains the 2200x1500 canvas and top-topic selector.
+- validation: `pnpm pages:check`, `pnpm check`, `pnpm build`, local static HTTP verification, public Pages HTTP verification, and deployed browser verification passed. Built-in sample data now includes 720 generated repositories and 360 generated topics for repeatable public Pages cloud testing. With top 2,000 selected, deployed sample verification placed 358 of 368 topics.
 - risks: Browser canvas rendering may still skip words that cannot fit, but it now uses a larger surface and smaller text.
 - risks: Very low-frequency topics can be omitted when they do not fit in the bounded silhouette.
