@@ -27,5 +27,5 @@
 - memory: Stores only drawn word hitboxes for click handling.
 - CPU: Cloud work occurs only after the user clicks `Build topic cloud`.
 - event-loop lag: Placement is bounded by topic cap and per-word placement attempts.
-- validation: `pnpm pages:check`, `pnpm check`, `pnpm build`, and local static HTTP verification passed.
+- validation: `pnpm pages:check`, `pnpm check`, `pnpm build`, local static HTTP verification, public Pages HTTP verification, and deployed canvas click verification passed.
 - risks: Very low-frequency topics can be omitted when they do not fit in the bounded silhouette.

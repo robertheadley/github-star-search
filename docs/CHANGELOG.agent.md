@@ -31,7 +31,7 @@
 - why: The prior topic cloud did not match the requested word-cloud behavior where higher-frequency topics are larger and arranged inside the provided shape.
 - components: `docs/app.js`, `docs/index.html`, `docs/styles.css`, `README.md`, `docs/ROADMAP.md`
 - type: feature
-- validation: `pnpm pages:check`, `pnpm check`, `pnpm build`, and static HTTP verification passed; public Pages verification runs after deploy.
+- validation: `pnpm pages:check`, `pnpm check`, `pnpm build`, static HTTP verification, public Pages HTTP verification, and deployed sample-data click verification passed.
 - performance: The cloud still computes only on demand and is capped at 220 rendered topics.
 - risks: Canvas placement is deterministic but may skip low-frequency topics if they cannot fit inside the mask at the current cap.
 - follow_up: Add a dedicated visual regression test if the project adopts browser testing infrastructure.
