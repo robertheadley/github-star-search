@@ -4,7 +4,10 @@ const databaseName = "github-star-search"
 const repoStoreName = "repo-cache"
 const initialRenderLimit = 100
 const renderBatchSize = 100
-const maxTopicCloudItems = 300
+const maxTopicCloudItems = 220
+const topicCloudWidth = 960
+const topicCloudHeight = 620
+const topicCloudPadding = 22
 
 const sampleRepos = [
   {
@@ -75,6 +78,7 @@ const state = {
   searchTimer: null,
   topicCloudBuilt: false,
   topicCounts: [],
+  topicWordHitboxes: [],
 }
 
 const elements = {
@@ -202,8 +206,8 @@ function setRepos(repos, meta) {
   state.cacheMeta = meta
   state.topicCloudBuilt = false
   state.topicCounts = []
+  state.topicWordHitboxes = []
   elements.topicCloud.hidden = true
-  elements.topicCloud.replaceChildren()
   elements.topicCloudCount.textContent = "Off"
   updateControls()
   updateCacheSummary()
@@ -645,8 +649,8 @@ async function clearCache() {
   state.renderLimit = initialRenderLimit
   state.topicCloudBuilt = false
   state.topicCounts = []
+  state.topicWordHitboxes = []
   elements.topicCloud.hidden = true
-  elements.topicCloud.replaceChildren()
   elements.topicCloudCount.textContent = "Off"
   updateControls()
   updateCacheSummary()
@@ -674,26 +678,208 @@ function renderTopicCloud() {
     state.topicCloudBuilt = true
   }
 
-  elements.topicCloud.replaceChildren()
-  const fragment = document.createDocumentFragment()
-  const maxCount = state.topicCounts[0]?.count || 1
-
-  for (const item of state.topicCounts.slice(0, maxTopicCloudItems)) {
-    const button = document.createElement("button")
-    button.type = "button"
-    button.textContent = `${item.topic} ${item.count}`
-    button.style.fontSize = `${0.82 + (item.count / maxCount) * 0.55}rem`
-    button.addEventListener("click", () => {
-      elements.topic.value = item.topic
-      applySearchNow()
-    })
-    fragment.append(button)
-  }
-
-  elements.topicCloud.append(fragment)
+  drawTopicCloud()
   elements.topicCloud.hidden = false
   elements.topicCloudCount.textContent = `${state.topicCounts.length.toLocaleString()} topics`
   elements.topicCloudButton.textContent = "Rebuild topic cloud"
+}
+
+function drawTopicCloud() {
+  const canvas = elements.topicCloud
+  const context = canvas.getContext("2d")
+  const pixelRatio = window.devicePixelRatio || 1
+  canvas.width = topicCloudWidth * pixelRatio
+  canvas.height = topicCloudHeight * pixelRatio
+  canvas.style.aspectRatio = `${topicCloudWidth} / ${topicCloudHeight}`
+  context.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0)
+  context.clearRect(0, 0, topicCloudWidth, topicCloudHeight)
+  context.fillStyle = "#ffffff"
+  context.fillRect(0, 0, topicCloudWidth, topicCloudHeight)
+
+  const mask = buildTopicCloudMask(topicCloudWidth, topicCloudHeight)
+  const placed = []
+  const words = state.topicCounts.slice(0, maxTopicCloudItems)
+  const maxCount = words[0]?.count || 1
+  const minCount = words.at(-1)?.count || 1
+
+  state.topicWordHitboxes = []
+  context.textBaseline = "middle"
+  context.textAlign = "center"
+
+  for (const item of words) {
+    const fontSize = scaleTopicFont(item.count, minCount, maxCount)
+    const angle = item.topic.length > 13 && placed.length % 4 === 0 ? -Math.PI / 2 : 0
+    const fontWeight = item.count > maxCount * 0.35 ? 850 : 760
+    context.font = `${fontWeight} ${fontSize}px Inter, Segoe UI, sans-serif`
+    const metrics = context.measureText(item.topic)
+    const width = Math.ceil(metrics.width) + 8
+    const height = Math.ceil(fontSize * 1.18)
+    const box = findWordPlacement(mask, placed, width, height, angle)
+
+    if (!box) {
+      continue
+    }
+
+    const colorWeight = item.count / maxCount
+    context.save()
+    context.translate(box.cx, box.cy)
+    context.rotate(angle)
+    context.fillStyle = colorWeight > 0.45 ? "#115e59" : colorWeight > 0.18 ? "#0f766e" : "#35566a"
+    context.fillText(item.topic, 0, 0)
+    context.restore()
+
+    const hitbox = {
+      topic: item.topic,
+      count: item.count,
+      x: box.x,
+      y: box.y,
+      width: box.width,
+      height: box.height,
+    }
+    placed.push(hitbox)
+    state.topicWordHitboxes.push(hitbox)
+  }
+}
+
+function scaleTopicFont(count, minCount, maxCount) {
+  if (maxCount === minCount) {
+    return 28
+  }
+
+  const normalized = (Math.log(count + 1) - Math.log(minCount + 1)) / (Math.log(maxCount + 1) - Math.log(minCount + 1))
+  return Math.round(13 + normalized * 42)
+}
+
+function buildTopicCloudMask(width, height) {
+  const canvas = document.createElement("canvas")
+  canvas.width = width
+  canvas.height = height
+  const context = canvas.getContext("2d", { willReadFrequently: true })
+  context.fillStyle = "#000000"
+
+  context.beginPath()
+  context.moveTo(width * 0.18, height * 0.03)
+  context.bezierCurveTo(width * 0.25, height * 0.02, width * 0.33, height * 0.10, width * 0.40, height * 0.13)
+  context.bezierCurveTo(width * 0.50, height * 0.10, width * 0.61, height * 0.10, width * 0.70, height * 0.13)
+  context.bezierCurveTo(width * 0.77, height * 0.08, width * 0.86, height * 0.01, width * 0.94, height * 0.02)
+  context.bezierCurveTo(width * 0.98, height * 0.13, width * 0.98, height * 0.25, width * 0.94, height * 0.36)
+  context.bezierCurveTo(width * 1.01, height * 0.48, width * 0.98, height * 0.69, width * 0.82, height * 0.80)
+  context.bezierCurveTo(width * 0.68, height * 0.90, width * 0.35, height * 0.91, width * 0.19, height * 0.78)
+  context.bezierCurveTo(width * 0.03, height * 0.65, width * 0.03, height * 0.42, width * 0.16, height * 0.31)
+  context.bezierCurveTo(width * 0.14, height * 0.20, width * 0.14, height * 0.10, width * 0.18, height * 0.03)
+  context.closePath()
+  context.fill()
+
+  context.beginPath()
+  context.ellipse(width * 0.54, height * 0.83, width * 0.18, height * 0.17, 0, 0, Math.PI * 2)
+  context.fill()
+
+  context.beginPath()
+  context.moveTo(width * 0.34, height * 0.80)
+  context.bezierCurveTo(width * 0.26, height * 0.82, width * 0.24, height * 0.70, width * 0.16, height * 0.69)
+  context.bezierCurveTo(width * 0.11, height * 0.69, width * 0.08, height * 0.71, width * 0.06, height * 0.73)
+  context.bezierCurveTo(width * 0.14, height * 0.78, width * 0.17, height * 0.98, width * 0.35, height * 0.93)
+  context.closePath()
+  context.fill()
+
+  context.fillRect(width * 0.41, height * 0.77, width * 0.09, height * 0.20)
+  context.fillRect(width * 0.52, height * 0.76, width * 0.08, height * 0.23)
+  context.fillRect(width * 0.62, height * 0.77, width * 0.08, height * 0.20)
+
+  return context.getImageData(0, 0, width, height).data
+}
+
+function findWordPlacement(mask, placed, width, height, angle) {
+  const centerX = topicCloudWidth * 0.52
+  const centerY = topicCloudHeight * 0.43
+  const rotatedWidth = angle === 0 ? width : height
+  const rotatedHeight = angle === 0 ? height : width
+  const maxRadius = Math.max(topicCloudWidth, topicCloudHeight) * 0.58
+
+  for (let step = 0; step < 1400; step++) {
+    const theta = step * 0.42
+    const radius = 3.4 * Math.sqrt(step)
+    if (radius > maxRadius) {
+      break
+    }
+
+    const cx = centerX + Math.cos(theta) * radius
+    const cy = centerY + Math.sin(theta) * radius * 0.72
+    const box = {
+      cx,
+      cy,
+      x: Math.round(cx - rotatedWidth / 2),
+      y: Math.round(cy - rotatedHeight / 2),
+      width: rotatedWidth,
+      height: rotatedHeight,
+    }
+
+    if (isInsideTopicMask(mask, box) && !intersectsPlacedWords(box, placed)) {
+      return box
+    }
+  }
+
+  return null
+}
+
+function isInsideTopicMask(mask, box) {
+  if (
+    box.x < topicCloudPadding ||
+    box.y < topicCloudPadding ||
+    box.x + box.width > topicCloudWidth - topicCloudPadding ||
+    box.y + box.height > topicCloudHeight - topicCloudPadding
+  ) {
+    return false
+  }
+
+  const samplesX = Math.max(3, Math.ceil(box.width / 28))
+  const samplesY = Math.max(3, Math.ceil(box.height / 22))
+  for (let yIndex = 0; yIndex <= samplesY; yIndex++) {
+    for (let xIndex = 0; xIndex <= samplesX; xIndex++) {
+      const x = Math.round(box.x + (box.width * xIndex) / samplesX)
+      const y = Math.round(box.y + (box.height * yIndex) / samplesY)
+      const alphaIndex = (y * topicCloudWidth + x) * 4 + 3
+      if (mask[alphaIndex] === 0) {
+        return false
+      }
+    }
+  }
+
+  return true
+}
+
+function intersectsPlacedWords(box, placed) {
+  const gap = 3
+  return placed.some(
+    (item) =>
+      box.x < item.x + item.width + gap &&
+      box.x + box.width + gap > item.x &&
+      box.y < item.y + item.height + gap &&
+      box.y + box.height + gap > item.y,
+  )
+}
+
+function handleTopicCloudClick(event) {
+  if (elements.topicCloud.hidden) {
+    return
+  }
+
+  const bounds = elements.topicCloud.getBoundingClientRect()
+  const x = ((event.clientX - bounds.left) / bounds.width) * topicCloudWidth
+  const y = ((event.clientY - bounds.top) / bounds.height) * topicCloudHeight
+  const hit = state.topicWordHitboxes.find(
+    (item) => x >= item.x && x <= item.x + item.width && y >= item.y && y <= item.y + item.height,
+  )
+
+  if (!hit) {
+    return
+  }
+
+  elements.query.value = hit.topic
+  if ([...elements.topic.options].some((option) => option.value === hit.topic)) {
+    elements.topic.value = hit.topic
+  }
+  applySearchNow()
 }
 
 function showMoreResults() {
@@ -707,6 +893,7 @@ elements.exportButton.addEventListener("click", handleExport)
 elements.importInput.addEventListener("change", handleImport)
 elements.clearButton.addEventListener("click", clearCache)
 elements.topicCloudButton.addEventListener("click", renderTopicCloud)
+elements.topicCloud.addEventListener("click", handleTopicCloudClick)
 elements.showMoreButton.addEventListener("click", showMoreResults)
 
 for (const input of [

@@ -127,7 +127,15 @@
           <span id="topic-cloud-count" class="status-pill">Off</span>
         </div>
         <button id="topic-cloud-button" class="secondary-button" type="button" disabled>Build topic cloud</button>
-        <div id="topic-cloud" class="topic-cloud" hidden></div>
+        <canvas
+          id="topic-cloud"
+          class="topic-cloud-canvas"
+          width="960"
+          height="620"
+          hidden
+          role="img"
+          aria-label="Weighted topic word cloud"
+        ></canvas>
       </section>
 
       <section class="results-region" aria-labelledby="results-heading">

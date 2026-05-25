@@ -331,27 +331,16 @@ button:disabled {
   grid-column: 1 / -1;
 }
 
-.topic-cloud {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
+.topic-cloud-canvas {
+  display: block;
+  inline-size: 100%;
+  max-inline-size: 960px;
+  block-size: auto;
   margin-top: 16px;
-  max-height: 340px;
-  overflow: auto;
-  padding-right: 4px;
-}
-
-.topic-cloud button {
-  min-height: 30px;
-  border: 1px solid #b8dcd8;
-  background: #e5f3f1;
-  color: #115e59;
-  font-weight: 800;
-  padding: 4px 10px;
-}
-
-.topic-cloud button:hover {
-  background: #d0ebe7;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #ffffff;
+  cursor: pointer;
 }
 
 .load-more-region {
