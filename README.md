@@ -58,8 +58,9 @@ To publish it on GitHub Pages:
 
 The topic cloud is hidden until it is built. When opened, it draws a large
 weighted word cloud in a silhouette mask: topics that appear more often use
-larger text. Clicking a word loads that topic into search and applies the topic
-filter when the matching filter option exists.
+larger text. Use the cloud-size control to choose how many top topics should be
+considered for placement. Clicking a word loads that topic into search and
+applies the topic filter when the matching filter option exists.
 
 ## Requirements
 

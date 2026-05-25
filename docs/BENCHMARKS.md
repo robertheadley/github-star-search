@@ -33,14 +33,14 @@
 
 - timestamp: 2026-05-25T14:36:00-05:00
 - scenario: Larger on-demand shaped topic cloud for dense topic sets.
-- method: Increased canvas from 960x620 to 1440x960, reduced logarithmic font range from 13-55 px to 8-36 px, raised topic cap from 220 to 500, relaxed mask sampling to require 82 percent of sampled points inside the shape, and tightened collision gap to 1 px.
+- method: Increased canvas from 960x620 to 2200x1500, reduced logarithmic font range from 13-55 px to 5-30 px, added user-selectable top-topic limits from 500 to 5,000, relaxed mask sampling to require 76 percent of sampled points inside the shape, and tightened collision gap to 1 px.
 - environment: Windows, static GitHub Pages app.
 - startup time: Not affected; cloud remains hidden until requested.
 - latency: Static syntax/build and local HTTP validation passed.
-- job duration: Placement remains bounded by 500 topic cap and 5,200 attempts per topic.
+- job duration: Placement remains bounded by the selected cloud-size cap and 7,200 attempts per topic.
 - memory: Stores drawn word hitboxes only for click handling.
 - CPU: Cloud work still occurs only after the user clicks `Build topic cloud`.
 - event-loop lag: More topics can draw than the prior version, with user-visible placed/total status.
-- validation: `pnpm pages:check`, `pnpm check`, `pnpm build`, and local static HTTP verification passed.
+- validation: `pnpm pages:check`, `pnpm check`, `pnpm build`, and local static HTTP verification passed. Built-in sample data now includes 720 generated repositories and 360 generated topics for repeatable public Pages cloud testing. The page contains the 2200x1500 canvas and top-topic selector.
 - risks: Browser canvas rendering may still skip words that cannot fit, but it now uses a larger surface and smaller text.
 - risks: Very low-frequency topics can be omitted when they do not fit in the bounded silhouette.

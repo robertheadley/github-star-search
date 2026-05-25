@@ -4,10 +4,9 @@ const databaseName = "github-star-search"
 const repoStoreName = "repo-cache"
 const initialRenderLimit = 100
 const renderBatchSize = 100
-const maxTopicCloudItems = 500
-const topicCloudWidth = 1440
-const topicCloudHeight = 960
-const topicCloudPadding = 14
+const topicCloudWidth = 2200
+const topicCloudHeight = 1500
+const topicCloudPadding = 12
 
 const sampleRepos = [
   {
@@ -69,6 +68,30 @@ const sampleRepos = [
   },
 ]
 
+const sampleTopicPool = Array.from({ length: 360 }, (_, index) => `topic-${index}`)
+const sampleLanguages = ["TypeScript", "JavaScript", "Go", "Python", "Rust"]
+for (let index = 0; index < 720; index += 1) {
+  sampleRepos.push({
+    id: 1000 + index,
+    fullName: `sample-owner-${index % 90}/sample-repo-${index}`,
+    owner: `sample-owner-${index % 90}`,
+    name: `sample-repo-${index}`,
+    description: `Sample repository ${index} for large topic cloud verification`,
+    htmlUrl: `https://github.com/sample-owner/sample-repo-${index}`,
+    language: sampleLanguages[index % sampleLanguages.length],
+    topics: Array.from({ length: 8 }, (_, offset) => sampleTopicPool[(index + offset * 23) % sampleTopicPool.length]),
+    stars: (index * 41) % 100000,
+    forks: (index * 13) % 4000,
+    archived: false,
+    disabled: false,
+    private: false,
+    fork: index % 11 === 0,
+    pushedAt: "2026-05-01T00:00:00Z",
+    updatedAt: "2026-05-20T00:00:00Z",
+    starredAt: "2026-05-21T00:00:00Z",
+  })
+}
+
 const state = {
   repos: [],
   filtered: [],
@@ -100,6 +123,7 @@ const elements = {
   exportButton: document.querySelector("#export-button"),
   importInput: document.querySelector("#import-input"),
   clearButton: document.querySelector("#clear-button"),
+  topicCloudLimit: document.querySelector("#topic-cloud-limit"),
   topicCloudButton: document.querySelector("#topic-cloud-button"),
   topicCloud: document.querySelector("#topic-cloud"),
   topicCloudCount: document.querySelector("#topic-cloud-count"),
@@ -680,7 +704,7 @@ function renderTopicCloud() {
 
   drawTopicCloud()
   elements.topicCloud.hidden = false
-  elements.topicCloudCount.textContent = `${state.topicWordHitboxes.length.toLocaleString()} of ${state.topicCounts.length.toLocaleString()} topics`
+  elements.topicCloudCount.textContent = `${state.topicWordHitboxes.length.toLocaleString()} placed of ${state.topicCounts.length.toLocaleString()} topics`
   elements.topicCloudButton.textContent = "Rebuild topic cloud"
 }
 
@@ -698,7 +722,8 @@ function drawTopicCloud() {
 
   const mask = buildTopicCloudMask(topicCloudWidth, topicCloudHeight)
   const placed = []
-  const words = state.topicCounts.slice(0, maxTopicCloudItems)
+  const requestedLimit = Number(elements.topicCloudLimit.value) || 1000
+  const words = state.topicCounts.slice(0, requestedLimit)
   const maxCount = words[0]?.count || 1
   const minCount = words.at(-1)?.count || 1
 
@@ -743,11 +768,11 @@ function drawTopicCloud() {
 
 function scaleTopicFont(count, minCount, maxCount) {
   if (maxCount === minCount) {
-    return 18
+    return 12
   }
 
   const normalized = (Math.log(count + 1) - Math.log(minCount + 1)) / (Math.log(maxCount + 1) - Math.log(minCount + 1))
-  return Math.round(8 + normalized * 28)
+  return Math.round(5 + normalized * 25)
 }
 
 function buildTopicCloudMask(width, height) {
@@ -794,11 +819,11 @@ function findWordPlacement(mask, placed, width, height, angle) {
   const centerY = topicCloudHeight * 0.46
   const rotatedWidth = angle === 0 ? width : height
   const rotatedHeight = angle === 0 ? height : width
-  const maxRadius = Math.max(topicCloudWidth, topicCloudHeight) * 0.7
+  const maxRadius = Math.max(topicCloudWidth, topicCloudHeight) * 0.72
 
-  for (let step = 0; step < 5200; step++) {
+  for (let step = 0; step < 7200; step++) {
     const theta = step * 0.47
-    const radius = 2.7 * Math.sqrt(step)
+    const radius = 2.9 * Math.sqrt(step)
     if (radius > maxRadius) {
       break
     }
@@ -832,8 +857,8 @@ function isInsideTopicMask(mask, box) {
     return false
   }
 
-  const samplesX = Math.max(2, Math.ceil(box.width / 34))
-  const samplesY = Math.max(2, Math.ceil(box.height / 28))
+  const samplesX = Math.max(2, Math.ceil(box.width / 44))
+  const samplesY = Math.max(2, Math.ceil(box.height / 36))
   let inside = 0
   let total = 0
   for (let yIndex = 0; yIndex <= samplesY; yIndex++) {
@@ -848,7 +873,7 @@ function isInsideTopicMask(mask, box) {
     }
   }
 
-  return inside / total >= 0.82
+  return inside / total >= 0.76
 }
 
 function intersectsPlacedWords(box, placed) {
@@ -896,6 +921,11 @@ elements.exportButton.addEventListener("click", handleExport)
 elements.importInput.addEventListener("change", handleImport)
 elements.clearButton.addEventListener("click", clearCache)
 elements.topicCloudButton.addEventListener("click", renderTopicCloud)
+elements.topicCloudLimit.addEventListener("change", () => {
+  if (!elements.topicCloud.hidden) {
+    renderTopicCloud()
+  }
+})
 elements.topicCloud.addEventListener("click", handleTopicCloudClick)
 elements.showMoreButton.addEventListener("click", showMoreResults)
 

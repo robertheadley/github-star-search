@@ -329,13 +329,24 @@ button:disabled {
 
 .topic-panel {
   grid-column: 1 / -1;
-  margin-inline: calc(clamp(16px, 4vw, 56px) * -0.5);
+  margin-inline: calc(clamp(16px, 4vw, 56px) * -1);
+}
+
+.topic-cloud-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: end;
+}
+
+.topic-cloud-controls label {
+  max-inline-size: 180px;
 }
 
 .topic-cloud-canvas {
   display: block;
   inline-size: 100%;
-  max-inline-size: 1440px;
+  max-inline-size: 2200px;
   block-size: auto;
   margin-top: 16px;
   margin-inline: auto;
@@ -411,6 +422,7 @@ button:disabled {
   }
 
   .form-actions,
+  .topic-cloud-controls,
   .toolbar {
     align-items: stretch;
     flex-direction: column;

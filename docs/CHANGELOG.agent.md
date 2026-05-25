@@ -39,11 +39,11 @@
 ## github-pages-larger-topic-cloud-20260525
 
 - timestamp: 2026-05-25T14:32:00-05:00
-- what: Enlarged the weighted topic cloud canvas, reduced word sizes, increased topic cap, and relaxed mask placement.
+- what: Enlarged the weighted topic cloud canvas, reduced word sizes, added selectable cloud size, and relaxed mask placement.
 - why: The deployed cloud only placed a few words for a large topic set because the prior canvas and collision rules were too restrictive.
 - components: `docs/app.js`, `docs/index.html`, `docs/styles.css`, `README.md`, `docs/BENCHMARKS.md`
 - type: feature, performance tuning
 - validation: Pending syntax/build checks, static HTTP verification, and deployed Pages check.
-- performance: Cloud remains on-demand; placement is bounded by a 500-topic cap and a fixed attempt limit.
+- performance: Cloud remains on-demand; placement is bounded by the selected top-topic cap and a fixed attempt limit. The sample dataset now includes enough generated topics to test dense cloud placement.
 - risks: Very dense topic sets can still omit words that cannot fit, but the status pill now reports placed topics versus total topics.
 - follow_up: Add viewport controls or an exportable cloud image if users want to inspect every low-frequency topic.
