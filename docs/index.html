@@ -63,6 +63,8 @@
           Enter a username to fetch public starred repositories. Add a token
           only when you need higher GitHub API limits.
         </div>
+
+        <div id="cache-summary" class="cache-summary" hidden></div>
       </section>
 
       <section class="panel search-panel" aria-labelledby="search-heading">
@@ -119,10 +121,22 @@
         </div>
       </section>
 
+      <section class="panel topic-panel" aria-labelledby="topic-cloud-heading">
+        <div class="section-heading">
+          <h2 id="topic-cloud-heading">Topic Cloud</h2>
+          <span id="topic-cloud-count" class="status-pill">Off</span>
+        </div>
+        <button id="topic-cloud-button" class="secondary-button" type="button" disabled>Build topic cloud</button>
+        <div id="topic-cloud" class="topic-cloud" hidden></div>
+      </section>
+
       <section class="results-region" aria-labelledby="results-heading">
         <h2 id="results-heading" class="visually-hidden">Results</h2>
         <div id="results" class="results empty-state">
           Load stars to begin searching.
+        </div>
+        <div class="load-more-region">
+          <button id="show-more-button" class="secondary-button" type="button" hidden>Show more</button>
         </div>
       </section>
     </main>

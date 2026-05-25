@@ -265,6 +265,12 @@ button:disabled {
   font-size: 0.92rem;
 }
 
+.cache-summary {
+  margin-top: 10px;
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+
 .results-region {
   grid-column: 1 / -1;
 }
@@ -319,6 +325,39 @@ button:disabled {
   color: #115e59;
   font-size: 0.8rem;
   font-weight: 800;
+}
+
+.topic-panel {
+  grid-column: 1 / -1;
+}
+
+.topic-cloud {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 16px;
+  max-height: 340px;
+  overflow: auto;
+  padding-right: 4px;
+}
+
+.topic-cloud button {
+  min-height: 30px;
+  border: 1px solid #b8dcd8;
+  background: #e5f3f1;
+  color: #115e59;
+  font-weight: 800;
+  padding: 4px 10px;
+}
+
+.topic-cloud button:hover {
+  background: #d0ebe7;
+}
+
+.load-more-region {
+  display: flex;
+  justify-content: center;
+  margin-top: 16px;
 }
 
 .repo-meta {

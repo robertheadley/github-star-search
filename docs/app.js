@@ -1,4 +1,10 @@
-const cacheKey = "github-star-search:repos:v1"
+const cacheKey = "github-star-search:repos:v2"
+const legacyCacheKey = "github-star-search:repos:v1"
+const databaseName = "github-star-search"
+const repoStoreName = "repo-cache"
+const initialRenderLimit = 100
+const renderBatchSize = 100
+const maxTopicCloudItems = 300
 
 const sampleRepos = [
   {
@@ -64,6 +70,11 @@ const state = {
   repos: [],
   filtered: [],
   loading: false,
+  renderLimit: initialRenderLimit,
+  cacheMeta: null,
+  searchTimer: null,
+  topicCloudBuilt: false,
+  topicCounts: [],
 }
 
 const elements = {
@@ -74,6 +85,7 @@ const elements = {
   sampleButton: document.querySelector("#sample-button"),
   progress: document.querySelector("#progress"),
   status: document.querySelector("#connection-status"),
+  cacheSummary: document.querySelector("#cache-summary"),
   query: document.querySelector("#query"),
   language: document.querySelector("#language"),
   topic: document.querySelector("#topic"),
@@ -84,9 +96,58 @@ const elements = {
   exportButton: document.querySelector("#export-button"),
   importInput: document.querySelector("#import-input"),
   clearButton: document.querySelector("#clear-button"),
+  topicCloudButton: document.querySelector("#topic-cloud-button"),
+  topicCloud: document.querySelector("#topic-cloud"),
+  topicCloudCount: document.querySelector("#topic-cloud-count"),
   resultCount: document.querySelector("#result-count"),
   results: document.querySelector("#results"),
+  showMoreButton: document.querySelector("#show-more-button"),
   template: document.querySelector("#repo-template"),
+}
+
+function openCacheDatabase() {
+  if (!("indexedDB" in window)) {
+    return Promise.reject(new Error("IndexedDB is not available in this browser."))
+  }
+
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(databaseName, 1)
+    request.onupgradeneeded = () => {
+      request.result.createObjectStore(repoStoreName, { keyPath: "key" })
+    }
+    request.onsuccess = () => resolve(request.result)
+    request.onerror = () => reject(request.error)
+  })
+}
+
+async function readIndexedCache() {
+  const db = await openCacheDatabase()
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction(repoStoreName, "readonly")
+    const request = transaction.objectStore(repoStoreName).get(cacheKey)
+    request.onsuccess = () => resolve(request.result ?? null)
+    request.onerror = () => reject(request.error)
+  }).finally(() => db.close())
+}
+
+async function writeIndexedCache(record) {
+  const db = await openCacheDatabase()
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction(repoStoreName, "readwrite")
+    transaction.objectStore(repoStoreName).put({ key: cacheKey, ...record })
+    transaction.oncomplete = () => resolve()
+    transaction.onerror = () => reject(transaction.error)
+  }).finally(() => db.close())
+}
+
+async function clearIndexedCache() {
+  const db = await openCacheDatabase()
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction(repoStoreName, "readwrite")
+    transaction.objectStore(repoStoreName).delete(cacheKey)
+    transaction.oncomplete = () => resolve()
+    transaction.onerror = () => reject(transaction.error)
+  }).finally(() => db.close())
 }
 
 function normalizeGitHubRepo(repo) {
@@ -109,6 +170,44 @@ function normalizeGitHubRepo(repo) {
     updatedAt: repo.updated_at,
     starredAt: repo.starred_at ?? null,
   }
+}
+
+function prepareRepo(repo) {
+  const topics = Array.isArray(repo.topics) ? repo.topics : []
+  const language = repo.language || null
+  const description = repo.description || ""
+  const fullName = repo.fullName || ""
+  const owner = repo.owner || ""
+  const name = repo.name || ""
+  const topicText = topics.join(" ")
+
+  return {
+    ...repo,
+    topics,
+    language,
+    _search: [fullName, owner, name, description, language, topicText].join(" ").toLowerCase(),
+    _nameSearch: fullName.toLowerCase(),
+    _descriptionSearch: description.toLowerCase(),
+    _topicsLower: topics.map((topic) => topic.toLowerCase()),
+    _languageLower: (language || "").toLowerCase(),
+    _updatedTime: Date.parse(repo.updatedAt || "") || 0,
+    _starredTime: Date.parse(repo.starredAt || "") || 0,
+  }
+}
+
+function setRepos(repos, meta) {
+  state.repos = repos.map(prepareRepo)
+  state.filtered = []
+  state.renderLimit = initialRenderLimit
+  state.cacheMeta = meta
+  state.topicCloudBuilt = false
+  state.topicCounts = []
+  elements.topicCloud.hidden = true
+  elements.topicCloud.replaceChildren()
+  elements.topicCloudCount.textContent = "Off"
+  updateControls()
+  updateCacheSummary()
+  applySearchNow()
 }
 
 function parseNextLink(linkHeader) {
@@ -179,30 +278,65 @@ async function fetchAllStars(username, token) {
   return repos
 }
 
-function loadFromCache() {
+async function loadFromCache() {
   try {
-    const cached = JSON.parse(localStorage.getItem(cacheKey) || "null")
+    const cached = await readIndexedCache()
     if (Array.isArray(cached?.repos)) {
-      state.repos = cached.repos
-      updateControls()
-      applySearch()
+      setRepos(cached.repos, cached.meta)
       updateStatus(`Cached ${state.repos.length}`)
-      updateProgress(`Loaded ${state.repos.length} repositories from this browser cache.`)
+      updateProgress(`Loaded ${state.repos.length} repositories from IndexedDB cache. Search is local now.`)
+      return
+    }
+  } catch (error) {
+    console.warn("IndexedDB cache unavailable", error)
+  }
+
+  try {
+    const legacy = JSON.parse(localStorage.getItem(legacyCacheKey) || "null")
+    if (Array.isArray(legacy?.repos)) {
+      await saveToCache(legacy.repos, legacy.source || "legacy")
+      localStorage.removeItem(legacyCacheKey)
+      setRepos(legacy.repos, readCacheMeta())
+      updateStatus(`Cached ${state.repos.length}`)
+      updateProgress(`Migrated ${state.repos.length} repositories from the older browser cache.`)
     }
   } catch {
-    localStorage.removeItem(cacheKey)
+    localStorage.removeItem(legacyCacheKey)
   }
 }
 
-function saveToCache(repos, source) {
-  localStorage.setItem(
-    cacheKey,
-    JSON.stringify({
-      source,
-      savedAt: new Date().toISOString(),
-      repos,
-    }),
-  )
+function readCacheMeta() {
+  try {
+    return JSON.parse(localStorage.getItem(cacheKey) || "null")
+  } catch {
+    localStorage.removeItem(cacheKey)
+    return null
+  }
+}
+
+async function saveToCache(repos, source) {
+  const meta = {
+    source,
+    savedAt: new Date().toISOString(),
+    count: repos.length,
+    storage: "IndexedDB",
+  }
+  try {
+    await writeIndexedCache({ meta, repos })
+  } catch (error) {
+    console.warn("IndexedDB cache write failed; using localStorage fallback", error)
+    meta.storage = "localStorage"
+    localStorage.setItem(
+      legacyCacheKey,
+      JSON.stringify({
+        source,
+        savedAt: meta.savedAt,
+        repos,
+      }),
+    )
+  }
+  localStorage.setItem(cacheKey, JSON.stringify(meta))
+  state.cacheMeta = meta
 }
 
 function updateProgress(message) {
@@ -211,6 +345,18 @@ function updateProgress(message) {
 
 function updateStatus(message) {
   elements.status.textContent = message
+}
+
+function updateCacheSummary() {
+  const meta = state.cacheMeta || readCacheMeta()
+  if (!meta?.savedAt) {
+    elements.cacheSummary.hidden = true
+    elements.cacheSummary.textContent = ""
+    return
+  }
+
+  elements.cacheSummary.hidden = false
+  elements.cacheSummary.textContent = `Cache: ${meta.count?.toLocaleString?.() ?? state.repos.length.toLocaleString()} repos from ${meta.source || "unknown"} saved ${formatDateTime(meta.savedAt)}.`
 }
 
 function uniqueSorted(values) {
@@ -243,6 +389,7 @@ function updateControls() {
   const hasRepos = state.repos.length > 0
   elements.exportButton.disabled = !hasRepos
   elements.clearButton.disabled = !hasRepos
+  elements.topicCloudButton.disabled = !hasRepos
 }
 
 function tokenizeQuery(query) {
@@ -253,43 +400,26 @@ function tokenizeQuery(query) {
     .filter(Boolean)
 }
 
-function searchableText(repo) {
-  return [
-    repo.fullName,
-    repo.owner,
-    repo.name,
-    repo.description,
-    repo.language,
-    repo.topics.join(" "),
-  ]
-    .filter(Boolean)
-    .join(" ")
-    .toLowerCase()
-}
-
 function scoreRepo(repo, tokens) {
   if (tokens.length === 0) {
     return 1
   }
 
-  const name = repo.fullName.toLowerCase()
-  const text = searchableText(repo)
   let score = 0
-
   for (const token of tokens) {
-    if (!text.includes(token)) {
+    if (!repo._search.includes(token)) {
       return -1
     }
-    if (name.includes(token)) {
+    if (repo._nameSearch.includes(token)) {
       score += 8
     }
-    if ((repo.description ?? "").toLowerCase().includes(token)) {
+    if (repo._descriptionSearch.includes(token)) {
       score += 3
     }
-    if (repo.topics.some((topic) => topic.toLowerCase().includes(token))) {
+    if (repo._topicsLower.some((topic) => topic.includes(token))) {
       score += 4
     }
-    if ((repo.language ?? "").toLowerCase() === token) {
+    if (repo._languageLower === token) {
       score += 5
     }
   }
@@ -297,58 +427,63 @@ function scoreRepo(repo, tokens) {
   return score
 }
 
-function dateValue(value) {
-  return value ? new Date(value).getTime() || 0 : 0
+function queueSearch() {
+  window.clearTimeout(state.searchTimer)
+  state.searchTimer = window.setTimeout(applySearchNow, 140)
 }
 
-function applySearch() {
+function applySearchNow() {
   const tokens = tokenizeQuery(elements.query.value)
   const language = elements.language.value
   const topic = elements.topic.value
+  const topicLower = topic.toLowerCase()
   const includeArchived = elements.includeArchived.checked
   const forksOnly = elements.forksOnly.checked
   const hideForks = elements.hideForks.checked
+  const matches = []
 
-  state.filtered = state.repos
-    .map((repo) => ({ repo, score: scoreRepo(repo, tokens) }))
-    .filter(({ repo, score }) => {
-      if (score < 0) {
-        return false
-      }
-      if (!includeArchived && repo.archived) {
-        return false
-      }
-      if (language && repo.language !== language) {
-        return false
-      }
-      if (topic && !repo.topics.includes(topic)) {
-        return false
-      }
-      if (forksOnly && !repo.fork) {
-        return false
-      }
-      if (hideForks && repo.fork) {
-        return false
-      }
-      return true
-    })
-    .sort((a, b) => {
-      switch (elements.sort.value) {
-        case "stars":
-          return b.repo.stars - a.repo.stars
-        case "updated":
-          return dateValue(b.repo.updatedAt) - dateValue(a.repo.updatedAt)
-        case "starred":
-          return dateValue(b.repo.starredAt) - dateValue(a.repo.starredAt)
-        case "name":
-          return a.repo.fullName.localeCompare(b.repo.fullName)
-        default:
-          return b.score - a.score || b.repo.stars - a.repo.stars
-      }
-    })
-    .map(({ repo }) => repo)
+  for (const repo of state.repos) {
+    if (!includeArchived && repo.archived) {
+      continue
+    }
+    if (language && repo.language !== language) {
+      continue
+    }
+    if (topic && !repo._topicsLower.includes(topicLower)) {
+      continue
+    }
+    if (forksOnly && !repo.fork) {
+      continue
+    }
+    if (hideForks && repo.fork) {
+      continue
+    }
 
+    const score = scoreRepo(repo, tokens)
+    if (score >= 0) {
+      matches.push({ repo, score })
+    }
+  }
+
+  matches.sort(compareSearchResults)
+  state.filtered = matches.map((match) => match.repo)
+  state.renderLimit = initialRenderLimit
   renderResults()
+}
+
+function compareSearchResults(a, b) {
+  switch (elements.sort.value) {
+    case "stars":
+      return b.repo.stars - a.repo.stars
+    case "updated":
+      return b.repo._updatedTime - a.repo._updatedTime
+    case "starred":
+      return b.repo._starredTime - a.repo._starredTime
+    case "name":
+      return a.repo.fullName.localeCompare(b.repo.fullName)
+    default:
+      return b.score - a.score || b.repo.stars - a.repo.stars
+  }
 }
 
 function formatDate(value) {
@@ -358,10 +493,18 @@ function formatDate(value) {
   return new Intl.DateTimeFormat(undefined, { dateStyle: "medium" }).format(new Date(value))
 }
 
+function formatDateTime(value) {
+  if (!value) {
+    return "Unknown"
+  }
+  return new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(new Date(value))
+}
+
 function renderResults() {
   elements.resultCount.textContent = `${state.filtered.length} result${state.filtered.length === 1 ? "" : "s"}`
   elements.results.className = "results"
   elements.results.replaceChildren()
+  elements.showMoreButton.hidden = true
 
   if (state.repos.length === 0) {
     elements.results.classList.add("empty-state")
@@ -375,26 +518,35 @@ function renderResults() {
     return
   }
 
-  for (const repo of state.filtered.slice(0, 250)) {
-    const node = elements.template.content.firstElementChild.cloneNode(true)
-    const link = node.querySelector(".repo-name")
-    link.textContent = repo.fullName
-    link.href = repo.htmlUrl
-    node.querySelector(".repo-description").textContent = repo.description || "No description provided."
-    node.querySelector(".repo-language").textContent = repo.language || "Unknown"
-    node.querySelector(".repo-stars").textContent = repo.stars.toLocaleString()
-    node.querySelector(".repo-updated").textContent = formatDate(repo.updatedAt)
-
-    const topics = node.querySelector(".topics")
-    for (const topic of repo.topics.slice(0, 8)) {
-      const tag = document.createElement("span")
-      tag.className = "topic"
-      tag.textContent = topic
-      topics.append(tag)
-    }
-
-    elements.results.append(node)
+  const fragment = document.createDocumentFragment()
+  for (const repo of state.filtered.slice(0, state.renderLimit)) {
+    fragment.append(renderRepoCard(repo))
   }
+
+  elements.results.append(fragment)
+  elements.showMoreButton.hidden = state.filtered.length <= state.renderLimit
+  elements.showMoreButton.textContent = `Show ${Math.min(renderBatchSize, state.filtered.length - state.renderLimit)} more`
+}
+
+function renderRepoCard(repo) {
+  const node = elements.template.content.firstElementChild.cloneNode(true)
+  const link = node.querySelector(".repo-name")
+  link.textContent = repo.fullName
+  link.href = repo.htmlUrl
+  node.querySelector(".repo-description").textContent = repo.description || "No description provided."
+  node.querySelector(".repo-language").textContent = repo.language || "Unknown"
+  node.querySelector(".repo-stars").textContent = repo.stars.toLocaleString()
+  node.querySelector(".repo-updated").textContent = formatDate(repo.updatedAt)
+
+  const topics = node.querySelector(".topics")
+  for (const topic of repo.topics.slice(0, 8)) {
+    const tag = document.createElement("span")
+    tag.className = "topic"
+    tag.textContent = topic
+    topics.append(tag)
+  }
+
+  return node
 }
 
 function setLoading(loading) {
@@ -410,13 +562,12 @@ async function handleLoad(event) {
   updateStatus("Loading")
 
   try {
-    const repos = await fetchAllStars(elements.username.value, elements.token.value.trim())
-    state.repos = repos
-    saveToCache(repos, elements.username.value.trim())
-    updateControls()
-    applySearch()
+    const source = elements.username.value.trim()
+    const repos = await fetchAllStars(source, elements.token.value.trim())
+    await saveToCache(repos, source)
+    setRepos(repos, state.cacheMeta)
     updateStatus(`Loaded ${repos.length}`)
-    updateProgress(`Loaded ${repos.length} repositories. Search is now local in this browser.`)
+    updateProgress(`Loaded and cached ${repos.length} repositories in IndexedDB. Search is now local in this browser.`)
   } catch (error) {
     updateStatus("Error")
     updateProgress(error instanceof Error ? error.message : String(error))
@@ -425,17 +576,30 @@ async function handleLoad(event) {
   }
 }
 
-function handleSample() {
-  state.repos = sampleRepos
-  saveToCache(sampleRepos, "sample")
-  updateControls()
-  applySearch()
+async function handleSample() {
+  await saveToCache(sampleRepos, "sample")
+  setRepos(sampleRepos, state.cacheMeta)
   updateStatus(`Loaded ${sampleRepos.length}`)
   updateProgress("Loaded sample repositories so the search UI can be tested without a GitHub API call.")
 }
 
+function stripPreparedFields(repo) {
+  const {
+    _search,
+    _nameSearch,
+    _descriptionSearch,
+    _topicsLower,
+    _languageLower,
+    _updatedTime,
+    _starredTime,
+    ...rawRepo
+  } = repo
+  return rawRepo
+}
+
 function handleExport() {
-  const blob = new Blob([`${JSON.stringify(state.repos, null, 2)}\n`], { type: "application/json" })
+  const rawRepos = state.repos.map(stripPreparedFields)
+  const blob = new Blob([`${JSON.stringify(rawRepos, null, 2)}\n`], { type: "application/json" })
   const url = URL.createObjectURL(blob)
   const anchor = document.createElement("a")
   anchor.href = url
@@ -455,12 +619,10 @@ async function handleImport(event) {
     if (!Array.isArray(repos)) {
       throw new Error("Imported file must contain an array of repositories.")
     }
-    state.repos = repos
-    saveToCache(repos, "import")
-    updateControls()
-    applySearch()
+    await saveToCache(repos, "import")
+    setRepos(repos, state.cacheMeta)
     updateStatus(`Imported ${repos.length}`)
-    updateProgress(`Imported ${repos.length} repositories from ${file.name}.`)
+    updateProgress(`Imported and cached ${repos.length} repositories from ${file.name}.`)
   } catch (error) {
     updateStatus("Import error")
     updateProgress(error instanceof Error ? error.message : String(error))
@@ -469,14 +631,74 @@ async function handleImport(event) {
   }
 }
 
-function clearCache() {
+async function clearCache() {
+  try {
+    await clearIndexedCache()
+  } catch (error) {
+    console.warn("IndexedDB cache clear failed", error)
+  }
   localStorage.removeItem(cacheKey)
+  localStorage.removeItem(legacyCacheKey)
   state.repos = []
   state.filtered = []
+  state.cacheMeta = null
+  state.renderLimit = initialRenderLimit
+  state.topicCloudBuilt = false
+  state.topicCounts = []
+  elements.topicCloud.hidden = true
+  elements.topicCloud.replaceChildren()
+  elements.topicCloudCount.textContent = "Off"
   updateControls()
+  updateCacheSummary()
   renderResults()
   updateStatus("Not loaded")
   updateProgress("Cache cleared. Enter a username to load starred repositories.")
+}
+
+function buildTopicCounts() {
+  const counts = new Map()
+  for (const repo of state.repos) {
+    for (const topic of repo.topics) {
+      counts.set(topic, (counts.get(topic) || 0) + 1)
+    }
+  }
+
+  return [...counts.entries()]
+    .map(([topic, count]) => ({ topic, count }))
+    .sort((a, b) => b.count - a.count || a.topic.localeCompare(b.topic))
+}
+
+function renderTopicCloud() {
+  if (!state.topicCloudBuilt) {
+    state.topicCounts = buildTopicCounts()
+    state.topicCloudBuilt = true
+  }
+
+  elements.topicCloud.replaceChildren()
+  const fragment = document.createDocumentFragment()
+  const maxCount = state.topicCounts[0]?.count || 1
+
+  for (const item of state.topicCounts.slice(0, maxTopicCloudItems)) {
+    const button = document.createElement("button")
+    button.type = "button"
+    button.textContent = `${item.topic} ${item.count}`
+    button.style.fontSize = `${0.82 + (item.count / maxCount) * 0.55}rem`
+    button.addEventListener("click", () => {
+      elements.topic.value = item.topic
+      applySearchNow()
+    })
+    fragment.append(button)
+  }
+
+  elements.topicCloud.append(fragment)
+  elements.topicCloud.hidden = false
+  elements.topicCloudCount.textContent = `${state.topicCounts.length.toLocaleString()} topics`
+  elements.topicCloudButton.textContent = "Rebuild topic cloud"
+}
+
+function showMoreResults() {
+  state.renderLimit += renderBatchSize
+  renderResults()
 }
 
 elements.form.addEventListener("submit", handleLoad)
@@ -484,6 +706,8 @@ elements.sampleButton.addEventListener("click", handleSample)
 elements.exportButton.addEventListener("click", handleExport)
 elements.importInput.addEventListener("change", handleImport)
 elements.clearButton.addEventListener("click", clearCache)
+elements.topicCloudButton.addEventListener("click", renderTopicCloud)
+elements.showMoreButton.addEventListener("click", showMoreResults)
 
 for (const input of [
   elements.query,
@@ -494,8 +718,8 @@ for (const input of [
   elements.forksOnly,
   elements.hideForks,
 ]) {
-  input.addEventListener("input", applySearch)
-  input.addEventListener("change", applySearch)
+  input.addEventListener("input", queueSearch)
+  input.addEventListener("change", queueSearch)
 }
 
 loadFromCache()

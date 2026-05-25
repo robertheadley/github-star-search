@@ -9,7 +9,9 @@ repositories without cloning thousands of repos.
 - Fetches starred repositories directly from GitHub in the browser.
 - Searches star metadata locally after loading: name, owner, description,
   language, topics, dates, and URL.
-- Supports browser cache, JSON export, and JSON import.
+- Supports IndexedDB browser cache, JSON export, and JSON import.
+- Keeps large star lists responsive with debounced search, precomputed search
+  fields, batched rendering, and an on-demand topic cloud.
 - Syncs your starred repositories from GitHub into a local cache.
 - Searches code remotely through GitHub's API, one starred repo at a time, so repositories do not need to be cloned.
 - Saves machine-readable JSON results for later filtering or import into other tools.
@@ -44,10 +46,12 @@ To publish it on GitHub Pages:
 
 - Star metadata is fetched from `https://api.github.com`.
 - Search runs locally in the browser after loading stars.
+- Star metadata is cached in browser IndexedDB so repeat visits do not need to
+  refetch thousands of repositories.
 - The optional token is used only for GitHub API requests in the current page
   and is intended for higher API limits.
 - Fully private-star access needs a future OAuth/device-flow implementation.
-- Repository metadata can be cached in browser `localStorage`.
+- A small cache summary is stored in browser `localStorage`.
 - Tokens are not written to the repository, exported JSON, or local cache.
 
 ## Requirements
