@@ -37,7 +37,7 @@
 - environment: Windows, static GitHub Pages app.
 - startup time: Not affected; cloud remains hidden until requested.
 - latency: Static syntax/build and local HTTP validation passed.
-- job duration: Placement remains bounded by the selected cloud-size cap and 7,200 attempts per topic.
+- job duration: Placement remains bounded by the selected cloud-size cap and 12,000 attempts per topic.
 - memory: Stores drawn word hitboxes only for click handling.
 - CPU: Cloud work still occurs only after the user clicks `Build topic cloud`.
 - event-loop lag: More topics can draw than the prior version, with user-visible placed/total status.

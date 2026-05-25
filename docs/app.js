@@ -821,9 +821,9 @@ function findWordPlacement(mask, placed, width, height, angle) {
   const rotatedHeight = angle === 0 ? height : width
   const maxRadius = Math.max(topicCloudWidth, topicCloudHeight) * 0.72
 
-  for (let step = 0; step < 7200; step++) {
+  for (let step = 0; step < 12000; step++) {
     const theta = step * 0.47
-    const radius = 2.9 * Math.sqrt(step)
+    const radius = 11.5 * Math.sqrt(step)
     if (radius > maxRadius) {
       break
     }
