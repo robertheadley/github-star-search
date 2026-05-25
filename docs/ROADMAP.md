@@ -34,7 +34,7 @@
 - [x] Add browser cache, JSON export, and JSON import.
 - [x] Move large repository cache to IndexedDB.
 - [x] Add debounced search, precomputed fields, and batched rendering for large star lists.
-- [x] Add an on-demand weighted topic word cloud with clickable topics.
+- [x] Add on-demand correlation analysis for similar repos, topic pairs, language clusters, and search suggestions.
 - [ ] Add OAuth/device-flow design for non-technical users and private-star access.
 - [ ] Document GitHub API limits in the app UI.
 - [ ] Add privacy-first architecture notes.

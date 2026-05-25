@@ -43,4 +43,19 @@
 - event-loop lag: More topics can draw than the prior version, with user-visible placed/total status.
 - validation: `pnpm pages:check`, `pnpm check`, `pnpm build`, local static HTTP verification, public Pages HTTP verification, and deployed browser verification passed. Built-in sample data now includes 720 generated repositories and 360 generated topics for repeatable public Pages cloud testing. With top 2,000 selected, deployed sample verification placed 358 of 368 topics.
 - risks: Browser canvas rendering may still skip words that cannot fit, but it now uses a larger surface and smaller text.
+
+## github-pages-correlations-20260525
+
+- timestamp: 2026-05-25T15:12:00-05:00
+- scenario: On-demand metadata correlation analysis after repositories are loaded.
+- method: Scan cached repositories for similar repos, topic co-occurrence pairs, language/topic clusters, owner/topic concentrations, and popular topic searches.
+- environment: Windows, static GitHub Pages app.
+- startup time: Not affected; correlations are off until requested.
+- latency: Local validation passed; deployed interaction validation pending.
+- job duration: Bounded by loaded repository count and per-repository topic cap of 30 for pair generation.
+- memory: Uses temporary maps for counts and renders a small set of top suggestions.
+- CPU: Correlation work occurs only after the user clicks `Find correlations`.
+- event-loop lag: Correlations are rendered as small summary lists instead of large canvases or thousands of DOM nodes.
+- validation: `pnpm pages:check`, `pnpm check`, `pnpm build`, and local HTTP verification passed.
+- risks: Correlation ranking is metadata-only and does not inspect repository code contents.
 - risks: Very low-frequency topics can be omitted when they do not fit in the bounded silhouette.

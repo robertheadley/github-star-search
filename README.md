@@ -11,7 +11,7 @@ repositories without cloning thousands of repos.
   language, topics, dates, and URL.
 - Supports IndexedDB browser cache, JSON export, and JSON import.
 - Keeps large star lists responsive with debounced search, precomputed search
-  fields, batched rendering, and an on-demand weighted topic word cloud.
+  fields, batched rendering, and on-demand correlation analysis.
 - Syncs your starred repositories from GitHub into a local cache.
 - Searches code remotely through GitHub's API, one starred repo at a time, so repositories do not need to be cloned.
 - Saves machine-readable JSON results for later filtering or import into other tools.
@@ -54,13 +54,19 @@ To publish it on GitHub Pages:
 - A small cache summary is stored in browser `localStorage`.
 - Tokens are not written to the repository, exported JSON, or local cache.
 
-### Topic word cloud
+### Correlations
 
-The topic cloud is hidden until it is built. When opened, it draws a large
-weighted word cloud in a silhouette mask: topics that appear more often use
-larger text. Use the cloud-size control to choose how many top topics should be
-considered for placement. Clicking a word loads that topic into search and
-applies the topic filter when the matching filter option exists.
+The Correlations panel is computed only when requested. It looks for patterns in
+your starred repositories and suggests useful searches:
+
+- similar repositories based on shared topics, language, and owner
+- topic pairs that often appear together
+- language/topic clusters
+- owner/topic concentrations
+- popular topic searches
+
+Correlation suggestions stay local in the browser and their **Search** buttons
+load the matching query or topic filter.
 
 ## Requirements
 

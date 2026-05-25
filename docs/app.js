@@ -4,9 +4,6 @@ const databaseName = "github-star-search"
 const repoStoreName = "repo-cache"
 const initialRenderLimit = 100
 const renderBatchSize = 100
-const topicCloudWidth = 2200
-const topicCloudHeight = 1500
-const topicCloudPadding = 12
 
 const sampleRepos = [
   {
@@ -76,7 +73,7 @@ for (let index = 0; index < 720; index += 1) {
     fullName: `sample-owner-${index % 90}/sample-repo-${index}`,
     owner: `sample-owner-${index % 90}`,
     name: `sample-repo-${index}`,
-    description: `Sample repository ${index} for large topic cloud verification`,
+    description: `Sample repository ${index} for correlation verification`,
     htmlUrl: `https://github.com/sample-owner/sample-repo-${index}`,
     language: sampleLanguages[index % sampleLanguages.length],
     topics: Array.from({ length: 8 }, (_, offset) => sampleTopicPool[(index + offset * 23) % sampleTopicPool.length]),
@@ -99,9 +96,7 @@ const state = {
   renderLimit: initialRenderLimit,
   cacheMeta: null,
   searchTimer: null,
-  topicCloudBuilt: false,
-  topicCounts: [],
-  topicWordHitboxes: [],
+  insightsBuilt: false,
 }
 
 const elements = {
@@ -123,10 +118,10 @@ const elements = {
   exportButton: document.querySelector("#export-button"),
   importInput: document.querySelector("#import-input"),
   clearButton: document.querySelector("#clear-button"),
-  topicCloudLimit: document.querySelector("#topic-cloud-limit"),
-  topicCloudButton: document.querySelector("#topic-cloud-button"),
-  topicCloud: document.querySelector("#topic-cloud"),
-  topicCloudCount: document.querySelector("#topic-cloud-count"),
+  correlationRepo: document.querySelector("#correlation-repo"),
+  correlationButton: document.querySelector("#correlation-button"),
+  correlations: document.querySelector("#correlations"),
+  insightsStatus: document.querySelector("#insights-status"),
   resultCount: document.querySelector("#result-count"),
   results: document.querySelector("#results"),
   showMoreButton: document.querySelector("#show-more-button"),
@@ -228,11 +223,10 @@ function setRepos(repos, meta) {
   state.filtered = []
   state.renderLimit = initialRenderLimit
   state.cacheMeta = meta
-  state.topicCloudBuilt = false
-  state.topicCounts = []
-  state.topicWordHitboxes = []
-  elements.topicCloud.hidden = true
-  elements.topicCloudCount.textContent = "Off"
+  state.insightsBuilt = false
+  elements.insightsStatus.textContent = "Off"
+  elements.correlations.className = "insights-grid empty-state"
+  elements.correlations.textContent = "Run correlations to analyze relationships in your starred repositories."
   updateControls()
   updateCacheSummary()
   applySearchNow()
@@ -417,7 +411,20 @@ function updateControls() {
   const hasRepos = state.repos.length > 0
   elements.exportButton.disabled = !hasRepos
   elements.clearButton.disabled = !hasRepos
-  elements.topicCloudButton.disabled = !hasRepos
+  elements.correlationButton.disabled = !hasRepos
+  updateCorrelationRepoOptions()
+}
+
+function updateCorrelationRepoOptions() {
+  const current = elements.correlationRepo.value
+  const candidates = (state.filtered.length > 0 ? state.filtered : state.repos).slice(0, 250)
+  elements.correlationRepo.replaceChildren(new Option("Top search result", ""))
+  for (const repo of candidates) {
+    elements.correlationRepo.append(new Option(repo.fullName, String(repo.id)))
+  }
+  if ([...elements.correlationRepo.options].some((option) => option.value === current)) {
+    elements.correlationRepo.value = current
+  }
 }
 
 function tokenizeQuery(query) {
@@ -497,6 +504,7 @@ function applySearchNow() {
   state.filtered = matches.map((match) => match.repo)
   state.renderLimit = initialRenderLimit
   renderResults()
+  updateCorrelationRepoOptions()
 }
 
 function compareSearchResults(a, b) {
@@ -671,11 +679,10 @@ async function clearCache() {
   state.filtered = []
   state.cacheMeta = null
   state.renderLimit = initialRenderLimit
-  state.topicCloudBuilt = false
-  state.topicCounts = []
-  state.topicWordHitboxes = []
-  elements.topicCloud.hidden = true
-  elements.topicCloudCount.textContent = "Off"
+  state.insightsBuilt = false
+  elements.insightsStatus.textContent = "Off"
+  elements.correlations.className = "insights-grid empty-state"
+  elements.correlations.textContent = "Load stars to find correlations."
   updateControls()
   updateCacheSummary()
   renderResults()
@@ -683,229 +690,226 @@ async function clearCache() {
   updateProgress("Cache cleared. Enter a username to load starred repositories.")
 }
 
-function buildTopicCounts() {
-  const counts = new Map()
+function buildCorrelations() {
+  if (state.repos.length === 0) {
+    return
+  }
+
+  const selectedRepo = getSelectedCorrelationRepo()
+  const topicCounts = new Map()
+  const topicPairs = new Map()
+  const languageTopics = new Map()
+  const ownerTopics = new Map()
+
   for (const repo of state.repos) {
-    for (const topic of repo.topics) {
-      counts.set(topic, (counts.get(topic) || 0) + 1)
-    }
-  }
-
-  return [...counts.entries()]
-    .map(([topic, count]) => ({ topic, count }))
-    .sort((a, b) => b.count - a.count || a.topic.localeCompare(b.topic))
-}
-
-function renderTopicCloud() {
-  if (!state.topicCloudBuilt) {
-    state.topicCounts = buildTopicCounts()
-    state.topicCloudBuilt = true
-  }
-
-  drawTopicCloud()
-  elements.topicCloud.hidden = false
-  elements.topicCloudCount.textContent = `${state.topicWordHitboxes.length.toLocaleString()} placed of ${state.topicCounts.length.toLocaleString()} topics`
-  elements.topicCloudButton.textContent = "Rebuild topic cloud"
-}
-
-function drawTopicCloud() {
-  const canvas = elements.topicCloud
-  const context = canvas.getContext("2d")
-  const pixelRatio = window.devicePixelRatio || 1
-  canvas.width = topicCloudWidth * pixelRatio
-  canvas.height = topicCloudHeight * pixelRatio
-  canvas.style.aspectRatio = `${topicCloudWidth} / ${topicCloudHeight}`
-  context.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0)
-  context.clearRect(0, 0, topicCloudWidth, topicCloudHeight)
-  context.fillStyle = "#ffffff"
-  context.fillRect(0, 0, topicCloudWidth, topicCloudHeight)
-
-  const mask = buildTopicCloudMask(topicCloudWidth, topicCloudHeight)
-  const placed = []
-  const requestedLimit = Number(elements.topicCloudLimit.value) || 1000
-  const words = state.topicCounts.slice(0, requestedLimit)
-  const maxCount = words[0]?.count || 1
-  const minCount = words.at(-1)?.count || 1
-
-  state.topicWordHitboxes = []
-  context.textBaseline = "middle"
-  context.textAlign = "center"
-
-  for (const item of words) {
-    const fontSize = scaleTopicFont(item.count, minCount, maxCount)
-    const angle = item.topic.length > 16 && placed.length % 5 === 0 ? -Math.PI / 2 : 0
-    const fontWeight = item.count > maxCount * 0.35 ? 820 : 720
-    context.font = `${fontWeight} ${fontSize}px Inter, Segoe UI, sans-serif`
-    const metrics = context.measureText(item.topic)
-    const width = Math.ceil(metrics.width) + 4
-    const height = Math.ceil(fontSize * 1.05)
-    const box = findWordPlacement(mask, placed, width, height, angle)
-
-    if (!box) {
-      continue
+    const uniqueTopics = [...new Set(repo.topics)].slice(0, 30)
+    for (const topic of uniqueTopics) {
+      incrementMap(topicCounts, topic)
+      if (repo.language) {
+        incrementMap(languageTopics, `${repo.language}\u0000${topic}`)
+      }
+      incrementMap(ownerTopics, `${repo.owner}\u0000${topic}`)
     }
 
-    const colorWeight = item.count / maxCount
-    context.save()
-    context.translate(box.cx, box.cy)
-    context.rotate(angle)
-    context.fillStyle = colorWeight > 0.45 ? "#115e59" : colorWeight > 0.18 ? "#0f766e" : "#35566a"
-    context.fillText(item.topic, 0, 0)
-    context.restore()
-
-    const hitbox = {
-      topic: item.topic,
-      count: item.count,
-      x: box.x,
-      y: box.y,
-      width: box.width,
-      height: box.height,
-    }
-    placed.push(hitbox)
-    state.topicWordHitboxes.push(hitbox)
-  }
-}
-
-function scaleTopicFont(count, minCount, maxCount) {
-  if (maxCount === minCount) {
-    return 12
-  }
-
-  const normalized = (Math.log(count + 1) - Math.log(minCount + 1)) / (Math.log(maxCount + 1) - Math.log(minCount + 1))
-  return Math.round(5 + normalized * 25)
-}
-
-function buildTopicCloudMask(width, height) {
-  const canvas = document.createElement("canvas")
-  canvas.width = width
-  canvas.height = height
-  const context = canvas.getContext("2d", { willReadFrequently: true })
-  context.fillStyle = "#000000"
-
-  context.beginPath()
-  context.moveTo(width * 0.18, height * 0.03)
-  context.bezierCurveTo(width * 0.25, height * 0.02, width * 0.33, height * 0.10, width * 0.40, height * 0.13)
-  context.bezierCurveTo(width * 0.50, height * 0.10, width * 0.61, height * 0.10, width * 0.70, height * 0.13)
-  context.bezierCurveTo(width * 0.77, height * 0.08, width * 0.86, height * 0.01, width * 0.94, height * 0.02)
-  context.bezierCurveTo(width * 0.98, height * 0.13, width * 0.98, height * 0.25, width * 0.94, height * 0.36)
-  context.bezierCurveTo(width * 1.01, height * 0.48, width * 0.98, height * 0.69, width * 0.82, height * 0.80)
-  context.bezierCurveTo(width * 0.68, height * 0.90, width * 0.35, height * 0.91, width * 0.19, height * 0.78)
-  context.bezierCurveTo(width * 0.03, height * 0.65, width * 0.03, height * 0.42, width * 0.16, height * 0.31)
-  context.bezierCurveTo(width * 0.14, height * 0.20, width * 0.14, height * 0.10, width * 0.18, height * 0.03)
-  context.closePath()
-  context.fill()
-
-  context.beginPath()
-  context.ellipse(width * 0.54, height * 0.83, width * 0.18, height * 0.17, 0, 0, Math.PI * 2)
-  context.fill()
-
-  context.beginPath()
-  context.moveTo(width * 0.34, height * 0.80)
-  context.bezierCurveTo(width * 0.26, height * 0.82, width * 0.24, height * 0.70, width * 0.16, height * 0.69)
-  context.bezierCurveTo(width * 0.11, height * 0.69, width * 0.08, height * 0.71, width * 0.06, height * 0.73)
-  context.bezierCurveTo(width * 0.14, height * 0.78, width * 0.17, height * 0.98, width * 0.35, height * 0.93)
-  context.closePath()
-  context.fill()
-
-  context.fillRect(width * 0.41, height * 0.77, width * 0.09, height * 0.20)
-  context.fillRect(width * 0.52, height * 0.76, width * 0.08, height * 0.23)
-  context.fillRect(width * 0.62, height * 0.77, width * 0.08, height * 0.20)
-
-  return context.getImageData(0, 0, width, height).data
-}
-
-function findWordPlacement(mask, placed, width, height, angle) {
-  const centerX = topicCloudWidth * 0.52
-  const centerY = topicCloudHeight * 0.46
-  const rotatedWidth = angle === 0 ? width : height
-  const rotatedHeight = angle === 0 ? height : width
-  const maxRadius = Math.max(topicCloudWidth, topicCloudHeight) * 0.72
-
-  for (let step = 0; step < 12000; step++) {
-    const theta = step * 0.47
-    const radius = 11.5 * Math.sqrt(step)
-    if (radius > maxRadius) {
-      break
-    }
-
-    const cx = centerX + Math.cos(theta) * radius
-    const cy = centerY + Math.sin(theta) * radius * 0.78
-    const box = {
-      cx,
-      cy,
-      x: Math.round(cx - rotatedWidth / 2),
-      y: Math.round(cy - rotatedHeight / 2),
-      width: rotatedWidth,
-      height: rotatedHeight,
-    }
-
-    if (isInsideTopicMask(mask, box) && !intersectsPlacedWords(box, placed)) {
-      return box
-    }
-  }
-
-  return null
-}
-
-function isInsideTopicMask(mask, box) {
-  if (
-    box.x < topicCloudPadding ||
-    box.y < topicCloudPadding ||
-    box.x + box.width > topicCloudWidth - topicCloudPadding ||
-    box.y + box.height > topicCloudHeight - topicCloudPadding
-  ) {
-    return false
-  }
-
-  const samplesX = Math.max(2, Math.ceil(box.width / 44))
-  const samplesY = Math.max(2, Math.ceil(box.height / 36))
-  let inside = 0
-  let total = 0
-  for (let yIndex = 0; yIndex <= samplesY; yIndex++) {
-    for (let xIndex = 0; xIndex <= samplesX; xIndex++) {
-      const x = Math.round(box.x + (box.width * xIndex) / samplesX)
-      const y = Math.round(box.y + (box.height * yIndex) / samplesY)
-      const alphaIndex = (y * topicCloudWidth + x) * 4 + 3
-      total += 1
-      if (mask[alphaIndex] > 0) {
-        inside += 1
+    for (let first = 0; first < uniqueTopics.length; first += 1) {
+      for (let second = first + 1; second < uniqueTopics.length; second += 1) {
+        const pair = [uniqueTopics[first], uniqueTopics[second]].sort((a, b) => a.localeCompare(b))
+        incrementMap(topicPairs, `${pair[0]}\u0000${pair[1]}`)
       }
     }
   }
 
-  return inside / total >= 0.76
+  renderCorrelations({
+    selectedRepo,
+    similarRepos: selectedRepo ? findSimilarRepos(selectedRepo) : [],
+    topicPairs: topEntries(topicPairs, 10),
+    languageTopics: topEntries(languageTopics, 10),
+    ownerTopics: topEntries(ownerTopics, 10).filter((entry) => entry.count > 1),
+    topicCounts: topEntries(topicCounts, 12),
+  })
 }
 
-function intersectsPlacedWords(box, placed) {
-  const gap = 1
-  return placed.some(
-    (item) =>
-      box.x < item.x + item.width + gap &&
-      box.x + box.width + gap > item.x &&
-      box.y < item.y + item.height + gap &&
-      box.y + box.height + gap > item.y,
-  )
+function getSelectedCorrelationRepo() {
+  const selectedId = Number(elements.correlationRepo.value)
+  if (selectedId) {
+    return state.repos.find((repo) => repo.id === selectedId) || null
+  }
+  return state.filtered[0] || state.repos[0] || null
 }
 
-function handleTopicCloudClick(event) {
-  if (elements.topicCloud.hidden) {
-    return
-  }
+function findSimilarRepos(baseRepo) {
+  const baseTopics = new Set(baseRepo._topicsLower)
+  return state.repos
+    .filter((repo) => repo.id !== baseRepo.id)
+    .map((repo) => {
+      const sharedTopics = repo.topics.filter((topic) => baseTopics.has(topic.toLowerCase()))
+      const sameLanguage = baseRepo.language && repo.language === baseRepo.language
+      const sameOwner = baseRepo.owner && repo.owner === baseRepo.owner
+      const score = sharedTopics.length * 8 + (sameLanguage ? 3 : 0) + (sameOwner ? 2 : 0)
+      return { repo, sharedTopics, sameLanguage, sameOwner, score }
+    })
+    .filter((item) => item.score > 0)
+    .sort((a, b) => b.score - a.score || b.repo.stars - a.repo.stars)
+    .slice(0, 10)
+}
 
-  const bounds = elements.topicCloud.getBoundingClientRect()
-  const x = ((event.clientX - bounds.left) / bounds.width) * topicCloudWidth
-  const y = ((event.clientY - bounds.top) / bounds.height) * topicCloudHeight
-  const hit = state.topicWordHitboxes.find(
-    (item) => x >= item.x && x <= item.x + item.width && y >= item.y && y <= item.y + item.height,
+function incrementMap(map, key) {
+  map.set(key, (map.get(key) || 0) + 1)
+}
+
+function topEntries(map, limit) {
+  return [...map.entries()]
+    .map(([key, count]) => ({ key, count }))
+    .sort((a, b) => b.count - a.count || a.key.localeCompare(b.key))
+    .slice(0, limit)
+}
+
+function renderCorrelations(insights) {
+  elements.correlations.className = "insights-grid"
+  elements.correlations.replaceChildren(
+    renderSimilarReposCard(insights.selectedRepo, insights.similarRepos),
+    renderTopicPairsCard(insights.topicPairs),
+    renderLanguageTopicsCard(insights.languageTopics),
+    renderOwnerTopicsCard(insights.ownerTopics),
+    renderPopularTopicsCard(insights.topicCounts),
   )
+  elements.insightsStatus.textContent = `${state.repos.length.toLocaleString()} repos`
+  state.insightsBuilt = true
+}
 
-  if (!hit) {
-    return
+function renderSimilarReposCard(selectedRepo, similarRepos) {
+  const card = createInsightCard("Similar Repositories")
+  if (!selectedRepo) {
+    card.append(createInsightEmpty("Load stars to compare repositories."))
+    return card
   }
 
-  elements.query.value = hit.topic
-  if ([...elements.topic.options].some((option) => option.value === hit.topic)) {
-    elements.topic.value = hit.topic
+  const note = document.createElement("p")
+  note.className = "insight-meta"
+  note.textContent = `Compared against ${selectedRepo.fullName}.`
+  card.append(note)
+
+  const list = createInsightList()
+  for (const item of similarRepos) {
+    const reason = [
+      item.sharedTopics.length ? item.sharedTopics.slice(0, 5).join(", ") : "",
+      item.sameLanguage ? item.repo.language : "",
+      item.sameOwner ? "same owner" : "",
+    ].filter(Boolean).join(" · ")
+    list.append(createRepoInsightItem(item.repo, reason || "metadata overlap"))
+  }
+  card.append(list.childElementCount ? list : createInsightEmpty("No similar repositories found."))
+  return card
+}
+
+function renderTopicPairsCard(entries) {
+  const card = createInsightCard("Topic Pairings")
+  const list = createInsightList()
+  for (const entry of entries) {
+    const [first, second] = entry.key.split("\u0000")
+    list.append(createSearchInsightItem(`${first} + ${second}`, `${entry.count} starred repos share both topics`, `${first} ${second}`, ""))
+  }
+  card.append(list.childElementCount ? list : createInsightEmpty("No repeated topic pairs found."))
+  return card
+}
+
+function renderLanguageTopicsCard(entries) {
+  const card = createInsightCard("Language Clusters")
+  const list = createInsightList()
+  for (const entry of entries) {
+    const [language, topic] = entry.key.split("\u0000")
+    list.append(createSearchInsightItem(`${language} + ${topic}`, `${entry.count} starred repos`, topic, topic))
+  }
+  card.append(list.childElementCount ? list : createInsightEmpty("No language/topic clusters found."))
+  return card
+}
+
+function renderOwnerTopicsCard(entries) {
+  const card = createInsightCard("Owner Concentrations")
+  const list = createInsightList()
+  for (const entry of entries) {
+    const [owner, topic] = entry.key.split("\u0000")
+    list.append(createSearchInsightItem(`${owner} + ${topic}`, `${entry.count} starred repos from this owner/topic`, `${owner} ${topic}`, topic))
+  }
+  card.append(list.childElementCount ? list : createInsightEmpty("No repeated owner/topic concentrations found."))
+  return card
+}
+
+function renderPopularTopicsCard(entries) {
+  const card = createInsightCard("Search Suggestions")
+  const list = createInsightList()
+  for (const entry of entries) {
+    list.append(createSearchInsightItem(entry.key, `${entry.count} starred repos`, entry.key, entry.key))
+  }
+  card.append(list.childElementCount ? list : createInsightEmpty("No topics found."))
+  return card
+}
+
+function createInsightCard(title) {
+  const card = document.createElement("article")
+  card.className = "insight-card"
+  const heading = document.createElement("h3")
+  heading.textContent = title
+  card.append(heading)
+  return card
+}
+
+function createInsightList() {
+  const list = document.createElement("ul")
+  list.className = "insight-list"
+  return list
+}
+
+function createInsightEmpty(message) {
+  const empty = document.createElement("p")
+  empty.className = "insight-meta"
+  empty.textContent = message
+  return empty
+}
+
+function createRepoInsightItem(repo, reason) {
+  const item = document.createElement("li")
+  item.className = "insight-item"
+  const link = document.createElement("a")
+  link.className = "insight-title"
+  link.href = repo.htmlUrl
+  link.target = "_blank"
+  link.rel = "noreferrer"
+  link.textContent = repo.fullName
+  const meta = document.createElement("div")
+  meta.className = "insight-meta"
+  meta.textContent = reason
+  item.append(link, meta)
+  return item
+}
+
+function createSearchInsightItem(title, metaText, query, topic) {
+  const item = document.createElement("li")
+  item.className = "insight-item"
+  const titleElement = document.createElement("div")
+  titleElement.className = "insight-title"
+  titleElement.textContent = title
+  const meta = document.createElement("div")
+  meta.className = "insight-meta"
+  meta.textContent = metaText
+  const actions = document.createElement("div")
+  actions.className = "insight-actions"
+  const button = document.createElement("button")
+  button.className = "secondary-button insight-action"
+  button.type = "button"
+  button.textContent = "Search"
+  button.addEventListener("click", () => applyInsightSearch(query, topic))
+  actions.append(button)
+  item.append(titleElement, meta, actions)
+  return item
+}
+
+function applyInsightSearch(query, topic) {
+  elements.query.value = query
+  if (topic && [...elements.topic.options].some((option) => option.value === topic)) {
+    elements.topic.value = topic
+  } else {
+    elements.topic.value = ""
   }
   applySearchNow()
 }
@@ -920,13 +924,12 @@ elements.sampleButton.addEventListener("click", handleSample)
 elements.exportButton.addEventListener("click", handleExport)
 elements.importInput.addEventListener("change", handleImport)
 elements.clearButton.addEventListener("click", clearCache)
-elements.topicCloudButton.addEventListener("click", renderTopicCloud)
-elements.topicCloudLimit.addEventListener("change", () => {
-  if (!elements.topicCloud.hidden) {
-    renderTopicCloud()
+elements.correlationButton.addEventListener("click", buildCorrelations)
+elements.correlationRepo.addEventListener("change", () => {
+  if (state.insightsBuilt) {
+    buildCorrelations()
   }
 })
-elements.topicCloud.addEventListener("click", handleTopicCloudClick)
 elements.showMoreButton.addEventListener("click", showMoreResults)
 
 for (const input of [

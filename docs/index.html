@@ -121,32 +121,21 @@
         </div>
       </section>
 
-      <section class="panel topic-panel" aria-labelledby="topic-cloud-heading">
+      <section class="panel insights-panel" aria-labelledby="insights-heading">
         <div class="section-heading">
-          <h2 id="topic-cloud-heading">Topic Cloud</h2>
-          <span id="topic-cloud-count" class="status-pill">Off</span>
+          <h2 id="insights-heading">Correlations</h2>
+          <span id="insights-status" class="status-pill">Off</span>
         </div>
-        <div class="topic-cloud-controls">
+        <div class="insights-controls">
           <label>
-            Cloud size
-            <select id="topic-cloud-limit">
-              <option value="500">Top 500</option>
-              <option value="1000" selected>Top 1,000</option>
-              <option value="2000">Top 2,000</option>
-              <option value="5000">Top 5,000</option>
+            Compare from
+            <select id="correlation-repo">
+              <option value="">Top search result</option>
             </select>
           </label>
-          <button id="topic-cloud-button" class="secondary-button" type="button" disabled>Build topic cloud</button>
+          <button id="correlation-button" class="secondary-button" type="button" disabled>Find correlations</button>
         </div>
-        <canvas
-          id="topic-cloud"
-          class="topic-cloud-canvas"
-          width="2200"
-          height="1500"
-          hidden
-          role="img"
-          aria-label="Weighted topic word cloud"
-        ></canvas>
+        <div id="correlations" class="insights-grid empty-state">Load stars to find correlations.</div>
       </section>
 
       <section class="results-region" aria-labelledby="results-heading">
@@ -175,6 +164,6 @@
       </article>
     </template>
 
-    <script src="./app.js?v=20260525-large-cloud" defer></script>
+    <script src="./app.js?v=20260525-correlations" defer></script>
   </body>
 </html>

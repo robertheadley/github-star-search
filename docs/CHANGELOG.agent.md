@@ -47,3 +47,15 @@
 - performance: Cloud remains on-demand; placement is bounded by the selected top-topic cap and a fixed attempt limit. The sample dataset now includes enough generated topics to test dense cloud placement.
 - risks: Very dense topic sets can still omit words that cannot fit, but the status pill now reports placed topics versus total topics.
 - follow_up: Add viewport controls or an exportable cloud image if users want to inspect every low-frequency topic.
+
+## github-pages-correlations-20260525
+
+- timestamp: 2026-05-25T15:12:00-05:00
+- what: Removed the topic cloud and added an on-demand correlations panel.
+- why: The shaped word cloud did not provide a useful experience for very large topic sets.
+- components: `docs/app.js`, `docs/index.html`, `docs/styles.css`, `README.md`, `docs/ROADMAP.md`
+- type: feature replacement
+- validation: `pnpm pages:check`, `pnpm check`, `pnpm build`, and local HTTP verification passed; deployed Pages verification pending.
+- performance: Correlations are computed only when requested and summarize top signals instead of rendering thousands of topics.
+- risks: Correlations are metadata-based and should be treated as suggestions, not semantic code/content understanding.
+- follow_up: Add persisted saved correlation reports if users want to compare snapshots over time.

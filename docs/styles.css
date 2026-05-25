@@ -327,33 +327,74 @@ button:disabled {
   font-weight: 800;
 }
 
-.topic-panel {
+.insights-panel {
   grid-column: 1 / -1;
-  margin-inline: calc(clamp(16px, 4vw, 56px) * -1);
 }
 
-.topic-cloud-controls {
+.insights-controls {
   display: flex;
   flex-wrap: wrap;
   gap: 12px;
   align-items: end;
+  margin-bottom: 16px;
 }
 
-.topic-cloud-controls label {
-  max-inline-size: 180px;
+.insights-controls label {
+  min-inline-size: min(100%, 360px);
 }
 
-.topic-cloud-canvas {
-  display: block;
-  inline-size: 100%;
-  max-inline-size: 2200px;
-  block-size: auto;
-  margin-top: 16px;
-  margin-inline: auto;
+.insights-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.insight-card {
   border: 1px solid var(--border);
   border-radius: 8px;
   background: #ffffff;
-  cursor: pointer;
+  padding: 16px;
+}
+
+.insight-card h3 {
+  margin: 0 0 10px;
+  font-size: 1rem;
+}
+
+.insight-list {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.insight-item {
+  display: grid;
+  gap: 4px;
+}
+
+.insight-title {
+  color: var(--accent-strong);
+  font-weight: 850;
+  text-decoration: none;
+}
+
+.insight-meta {
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+
+.insight-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.insight-action {
+  min-height: 30px;
+  padding: 4px 9px;
+  font-size: 0.82rem;
 }
 
 .load-more-region {
@@ -402,6 +443,7 @@ button:disabled {
 @media (max-width: 960px) {
   .app-header,
   .app-shell,
+  .insights-grid,
   .repo-card,
   .search-grid {
     grid-template-columns: 1fr;
@@ -422,7 +464,7 @@ button:disabled {
   }
 
   .form-actions,
-  .topic-cloud-controls,
+  .insights-controls,
   .toolbar {
     align-items: stretch;
     flex-direction: column;
