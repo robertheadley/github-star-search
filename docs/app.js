@@ -116,6 +116,7 @@ const elements = {
   forksOnly: document.querySelector("#forks-only"),
   hideForks: document.querySelector("#hide-forks"),
   exportButton: document.querySelector("#export-button"),
+  exportDlcButton: document.querySelector("#export-dlc-button"),
   importInput: document.querySelector("#import-input"),
   clearButton: document.querySelector("#clear-button"),
   correlationRepo: document.querySelector("#correlation-repo"),
@@ -181,6 +182,7 @@ function normalizeGitHubRepo(repo) {
     name: repo.name,
     description: repo.description,
     htmlUrl: repo.html_url,
+    defaultBranch: repo.default_branch || "main",
     language: repo.language,
     topics: Array.isArray(repo.topics) ? repo.topics : [],
     stars: repo.stargazers_count ?? 0,
@@ -410,6 +412,7 @@ function updateControls() {
 
   const hasRepos = state.repos.length > 0
   elements.exportButton.disabled = !hasRepos
+  elements.exportDlcButton.disabled = !hasRepos
   elements.clearButton.disabled = !hasRepos
   elements.correlationButton.disabled = !hasRepos
   updateCorrelationRepoOptions()
@@ -640,6 +643,17 @@ function handleExport() {
   const anchor = document.createElement("a")
   anchor.href = url
   anchor.download = "github-star-search-export.json"
+  anchor.click()
+  URL.revokeObjectURL(url)
+}
+
+function handleExportDlc() {
+  const urls = state.repos.map((repo) => `https://raw.githubusercontent.com/${repo.owner}/${repo.name}/${repo.defaultBranch || "main"}/README.md`)
+  const blob = new Blob([urls.join("\n") + "\n"], { type: "text/plain" })
+  const url = URL.createObjectURL(blob)
+  const anchor = document.createElement("a")
+  anchor.href = url
+  anchor.download = "readmes.dlc"
   anchor.click()
   URL.revokeObjectURL(url)
 }
@@ -922,6 +936,7 @@ function showMoreResults() {
 elements.form.addEventListener("submit", handleLoad)
 elements.sampleButton.addEventListener("click", handleSample)
 elements.exportButton.addEventListener("click", handleExport)
+elements.exportDlcButton.addEventListener("click", handleExportDlc)
 elements.importInput.addEventListener("change", handleImport)
 elements.clearButton.addEventListener("click", clearCache)
 elements.correlationButton.addEventListener("click", buildCorrelations)
