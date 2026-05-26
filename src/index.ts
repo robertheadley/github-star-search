@@ -3,7 +3,7 @@ import yargs from "yargs"
 import { hideBin } from "yargs/helpers"
 
 import { loadConfig } from "./config.js"
-import { codeResultsPath, ensureRuntimeDirs, metadataResultsPath, readJsonFile, starredReposPath, writeJsonFile } from "./fs.js"
+import { codeResultsPath, dlcExportPath, ensureRuntimeDirs, metadataResultsPath, readJsonFile, starredReposPath, writeJsonFile, writeTextFile } from "./fs.js"
 import { GitHubClient } from "./github.js"
 import { searchStarredRepos } from "./search.js"
 import type { CodeSearchResult, StarredRepo } from "./types.js"
@@ -111,6 +111,19 @@ await yargs(hideBin(process.argv))
       await writeJsonFile(codeResultsPath, allResults)
       printCodeResults(allResults)
       console.log(`\nSaved ${allResults.length} code results to ${codeResultsPath}`)
+    },
+  )
+  .command(
+    "export-dlc",
+    "Export a plain-text .dlc file containing download URLs for all READMEs.",
+    (command) => command,
+    async () => {
+      await ensureRuntimeDirs()
+      const repos = await loadCachedStars()
+      const urls = repos.map((repo) => `https://raw.githubusercontent.com/${repo.owner}/${repo.name}/${repo.defaultBranch}/README.md`)
+      const content = urls.join("\n") + "\n"
+      await writeTextFile(dlcExportPath, content)
+      console.log(`Saved ${urls.length} README URLs to ${dlcExportPath}`)
     },
   )
   .demandCommand(1)

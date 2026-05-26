@@ -14,6 +14,7 @@
     "stars:sync": "tsx src/index.ts sync",
     "stars:search": "tsx src/index.ts search",
     "stars:code": "tsx src/index.ts code",
+    "stars:export-dlc": "tsx src/index.ts export-dlc",
     "check": "tsc -p tsconfig.json --noEmit"
   },
   "engines": {
