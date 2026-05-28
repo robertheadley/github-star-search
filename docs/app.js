@@ -110,7 +110,9 @@ const elements = {
   cacheSummary: document.querySelector("#cache-summary"),
   query: document.querySelector("#query"),
   language: document.querySelector("#language"),
+  languageList: document.querySelector("#language-list"),
   topic: document.querySelector("#topic"),
+  topicList: document.querySelector("#topic-list"),
   sort: document.querySelector("#sort"),
   includeArchived: document.querySelector("#include-archived"),
   forksOnly: document.querySelector("#forks-only"),
@@ -307,6 +309,8 @@ async function loadFromCache() {
     const cached = await readIndexedCache()
     if (Array.isArray(cached?.repos)) {
       setRepos(cached.repos, cached.meta)
+      const savedUser = localStorage.getItem("github-star-search:username") || (cached.meta?.source !== "sample" && cached.meta?.source !== "legacy" && cached.meta?.source !== "import" ? cached.meta?.source : "")
+      if (savedUser) elements.username.value = savedUser
       updateStatus(`Cached ${state.repos.length}`)
       updateProgress(`Loaded ${state.repos.length} repositories from IndexedDB cache. Search is local now.`)
       return
@@ -321,6 +325,8 @@ async function loadFromCache() {
       await saveToCache(legacy.repos, legacy.source || "legacy")
       localStorage.removeItem(legacyCacheKey)
       setRepos(legacy.repos, readCacheMeta())
+      const savedUser = localStorage.getItem("github-star-search:username") || (legacy.source !== "sample" && legacy.source !== "legacy" && legacy.source !== "import" ? legacy.source : "")
+      if (savedUser) elements.username.value = savedUser
       updateStatus(`Cached ${state.repos.length}`)
       updateProgress(`Migrated ${state.repos.length} repositories from the older browser cache.`)
     }
@@ -387,28 +393,37 @@ function uniqueSorted(values) {
   return [...new Set(values.filter(Boolean))].sort((a, b) => a.localeCompare(b))
 }
 
-function replaceOptions(select, values, firstLabel) {
-  const current = select.value
-  select.replaceChildren(new Option(firstLabel, ""))
-  for (const value of values) {
-    select.append(new Option(value, value))
-  }
-  if (values.includes(current)) {
-    select.value = current
+function populateDatalist(datalist, values, maxItems = 500) {
+  datalist.replaceChildren()
+  for (const value of values.slice(0, maxItems)) {
+    datalist.append(new Option(value, value))
   }
 }
 
 function updateControls() {
-  replaceOptions(
-    elements.language,
-    uniqueSorted(state.repos.map((repo) => repo.language)),
-    "Any language",
-  )
-  replaceOptions(
-    elements.topic,
-    uniqueSorted(state.repos.flatMap((repo) => repo.topics)),
-    "Any topic",
-  )
+  const languageCounts = new Map()
+  for (const repo of state.repos) {
+    if (repo.language) {
+      languageCounts.set(repo.language, (languageCounts.get(repo.language) || 0) + 1)
+    }
+  }
+  const topLanguages = [...languageCounts.entries()]
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .map((entry) => entry[0])
+
+  populateDatalist(elements.languageList, topLanguages)
+
+  const topicCounts = new Map()
+  for (const repo of state.repos) {
+    for (const topic of repo.topics) {
+      topicCounts.set(topic, (topicCounts.get(topic) || 0) + 1)
+    }
+  }
+  const topTopics = [...topicCounts.entries()]
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .map((entry) => entry[0])
+
+  populateDatalist(elements.topicList, topTopics, 500)
 
   const hasRepos = state.repos.length > 0
   elements.exportButton.disabled = !hasRepos
@@ -602,6 +617,7 @@ async function handleLoad(event) {
 
   try {
     const source = elements.username.value.trim()
+    localStorage.setItem("github-star-search:username", source)
     const repos = await fetchAllStars(source, elements.token.value.trim())
     await saveToCache(repos, source)
     setRepos(repos, state.cacheMeta)
@@ -653,7 +669,7 @@ function handleExportDlc() {
   const url = URL.createObjectURL(blob)
   const anchor = document.createElement("a")
   anchor.href = url
-  anchor.download = "readmes.dlc"
+  anchor.download = "readmes.txt"
   anchor.click()
   URL.revokeObjectURL(url)
 }
@@ -920,11 +936,7 @@ function createSearchInsightItem(title, metaText, query, topic) {
 
 function applyInsightSearch(query, topic) {
   elements.query.value = query
-  if (topic && [...elements.topic.options].some((option) => option.value === topic)) {
-    elements.topic.value = topic
-  } else {
-    elements.topic.value = ""
-  }
+  elements.topic.value = topic || ""
   applySearchNow()
 }
 

@@ -81,16 +81,14 @@
 
           <label>
             Language
-            <select id="language">
-              <option value="">Any language</option>
-            </select>
+            <input id="language" list="language-list" placeholder="Any language" autocomplete="off" />
+            <datalist id="language-list"></datalist>
           </label>
 
           <label>
             Topic
-            <select id="topic">
-              <option value="">Any topic</option>
-            </select>
+            <input id="topic" list="topic-list" placeholder="Any topic" autocomplete="off" />
+            <datalist id="topic-list"></datalist>
           </label>
 
           <label>
@@ -113,7 +111,7 @@
 
         <div class="toolbar">
           <button id="export-button" class="secondary-button" type="button" disabled>Export JSON</button>
-          <button id="export-dlc-button" class="secondary-button" type="button" disabled>Export DLC</button>
+          <button id="export-dlc-button" class="secondary-button" type="button" disabled>Export TXT</button>
           <label class="import-button">
             Import JSON
             <input id="import-input" type="file" accept="application/json,.json" />
