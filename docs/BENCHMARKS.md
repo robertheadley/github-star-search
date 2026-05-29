@@ -59,3 +59,18 @@
 - validation: `pnpm pages:check`, `pnpm check`, `pnpm build`, local HTTP verification, public Pages HTTP verification, and deployed browser interaction verification passed.
 - risks: Correlation ranking is metadata-only and does not inspect repository code contents.
 - risks: Very low-frequency topics can be omitted when they do not fit in the bounded silhouette.
+
+## github-pages-starrank-20260529
+
+- timestamp: 2026-05-29T11:29:00-05:00
+- scenario: StarRank calculation and descending sort for a large starred-repository list.
+- method: Inline Node benchmark generated 8,000 repository records with varied creation dates, stars, forks, topics, descriptions, README flags, and license flags; each run calculated StarRank scores and sorted them descending.
+- environment: Windows, Node.js via PowerShell, local repository checkout.
+- startup time: Not affected; StarRank is computed after repository load/import/cache restore.
+- latency: Average score+sort time was 5.39 ms across 25 runs; p95 was 6.54 ms.
+- job duration: One benchmark process completed in about 600 ms including data generation and 25 repeated runs.
+- memory: Stores one prepared StarRank object and numeric `_starRankScore` per loaded repository in the browser.
+- CPU: StarRank uses bounded arithmetic and no network or DOM work during sorting.
+- event-loop lag: Calculation is one-time per load/import/cache restore, while sorting reuses `_starRankScore`.
+- validation: `pnpm pages:check`, `pnpm check`, `pnpm build`, formula execution check, local HTTP verification, and browser StarRank sort smoke test passed.
+- risks: README bonus remains unavailable for GitHub API list results until optional README probing is implemented.

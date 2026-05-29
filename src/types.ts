@@ -15,9 +15,40 @@ export type StarredRepo = {
   disabled: boolean
   private: boolean
   fork: boolean
+  createdAt: string | null
   pushedAt: string | null
   updatedAt: string | null
   starredAt: string | null
+  hasReadme?: boolean
+  hasLicense?: boolean
+}
+
+export type StarRankLabel =
+  | "Exceptional Momentum"
+  | "High Momentum"
+  | "Moderate Momentum"
+  | "Low Momentum"
+  | "Minimal Momentum"
+
+export type StarRank = {
+  score: number
+  rankLabel: StarRankLabel
+  components: {
+    stars: number
+    forks: number
+    ageDays: number
+    ageYears: number
+    starsPerYear: number
+    forksPerYear: number
+    expectedForks: number
+    forkSurprise: number
+    starMomentumScore: number
+    forkMomentumScore: number
+    forkSurpriseScore: number
+    rawPopularityScore: number
+    rawForkScore: number
+    metadataBonus: number
+  }
 }
 
 export type CodeSearchResult = {
@@ -53,8 +84,10 @@ export type GitHubStarredRepoResponse = {
   disabled: boolean
   private: boolean
   fork: boolean
+  created_at: string | null
   pushed_at: string | null
   updated_at: string | null
+  license?: unknown
   owner: {
     login: string
   }

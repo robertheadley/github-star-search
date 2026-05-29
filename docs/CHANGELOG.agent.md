@@ -59,3 +59,15 @@
 - performance: Correlations are computed only when requested and summarize top signals instead of rendering thousands of topics.
 - risks: Correlations are metadata-based and should be treated as suggestions, not semantic code/content understanding.
 - follow_up: Add persisted saved correlation reports if users want to compare snapshots over time.
+
+## github-pages-starrank-20260529
+
+- timestamp: 2026-05-29T11:20:00-05:00
+- what: Added StarRank age-adjusted repository momentum scoring to the CLI data model and the static GitHub Pages app.
+- why: Raw star counts over-rank old repositories, while the requested rating should prioritize current relevance through age-adjusted stars, forks, fork surprise, and bounded metadata bonuses.
+- components: `src/starrank.ts`, `src/types.ts`, `src/github.ts`, `src/index.ts`, `docs/app.js`, `docs/index.html`, `README.md`, `docs/ROADMAP.md`
+- type: feature
+- validation: `pnpm pages:check`, `pnpm check`, `pnpm build`, formula execution check, local static HTTP verification, and in-app browser StarRank sort smoke test passed.
+- performance: StarRank is calculated once per repository during prepare/load and reused for sorting/rendering.
+- risks: README presence is not proven by the current starred-repository list response, so the README bonus is applied only when imported data explicitly includes `hasReadme: true`.
+- follow_up: Add optional README probing or manifest indexing if exact README metadata becomes important.

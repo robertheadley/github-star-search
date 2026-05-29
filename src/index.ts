@@ -6,13 +6,16 @@ import { loadConfig } from "./config.js"
 import { codeResultsPath, dlcExportPath, ensureRuntimeDirs, metadataResultsPath, readJsonFile, starredReposPath, writeJsonFile, writeTextFile } from "./fs.js"
 import { GitHubClient } from "./github.js"
 import { searchStarredRepos } from "./search.js"
+import { calculateStarRank } from "./starrank.js"
 import type { CodeSearchResult, StarredRepo } from "./types.js"
 
 function printRepoTable(repos: StarredRepo[]): void {
   for (const repo of repos) {
     const language = repo.language ? ` [${repo.language}]` : ""
     const topics = repo.topics.length > 0 ? ` topics=${repo.topics.join(",")}` : ""
-    console.log(`${repo.fullName}${language} ★${repo.stars}${topics}`)
+    const starRank = calculateStarRank(repo)
+    const starRankText = starRank ? ` StarRank=${starRank.score} (${starRank.rankLabel})` : " StarRank=unavailable"
+    console.log(`${repo.fullName}${language} ★${repo.stars}${starRankText}${topics}`)
     if (repo.description) {
       console.log(`  ${repo.description}`)
     }

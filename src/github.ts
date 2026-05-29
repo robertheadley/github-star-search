@@ -71,9 +71,12 @@ export class GitHubClient {
           disabled: repo.disabled,
           private: repo.private,
           fork: repo.fork,
+          createdAt: repo.created_at,
           pushedAt: repo.pushed_at,
           updatedAt: repo.updated_at,
           starredAt: null,
+          hasReadme: false,
+          hasLicense: Boolean(repo.license),
         })
       }
       nextUrl = next

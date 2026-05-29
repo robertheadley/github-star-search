@@ -1,5 +1,6 @@
-const cacheKey = "github-star-search:repos:v2"
+const cacheKey = "github-star-search:repos:v3"
 const legacyCacheKey = "github-star-search:repos:v1"
+const previousCacheKeys = ["github-star-search:repos:v2", legacyCacheKey]
 const databaseName = "github-star-search"
 const repoStoreName = "repo-cache"
 const initialRenderLimit = 100
@@ -21,9 +22,12 @@ const sampleRepos = [
     disabled: false,
     private: false,
     fork: false,
+    createdAt: "2024-11-25T00:00:00Z",
     pushedAt: "2026-05-20T12:30:00Z",
     updatedAt: "2026-05-22T09:15:00Z",
     starredAt: "2026-05-24T15:00:00Z",
+    hasReadme: true,
+    hasLicense: true,
   },
   {
     id: 2,
@@ -40,9 +44,12 @@ const sampleRepos = [
     disabled: false,
     private: false,
     fork: false,
+    createdAt: "2016-10-04T00:00:00Z",
     pushedAt: "2026-05-21T17:20:00Z",
     updatedAt: "2026-05-24T08:05:00Z",
     starredAt: "2026-05-23T18:30:00Z",
+    hasReadme: true,
+    hasLicense: true,
   },
   {
     id: 3,
@@ -59,9 +66,12 @@ const sampleRepos = [
     disabled: false,
     private: false,
     fork: false,
+    createdAt: "2019-01-07T00:00:00Z",
     pushedAt: "2026-05-18T12:00:00Z",
     updatedAt: "2026-05-18T12:00:00Z",
     starredAt: "2026-05-22T14:00:00Z",
+    hasReadme: true,
+    hasLicense: true,
   },
 ]
 
@@ -83,9 +93,12 @@ for (let index = 0; index < 720; index += 1) {
     disabled: false,
     private: false,
     fork: index % 11 === 0,
+    createdAt: new Date(Date.UTC(2020 + (index % 6), index % 12, (index % 27) + 1)).toISOString(),
     pushedAt: "2026-05-01T00:00:00Z",
     updatedAt: "2026-05-20T00:00:00Z",
     starredAt: "2026-05-21T00:00:00Z",
+    hasReadme: true,
+    hasLicense: index % 5 !== 0,
   })
 }
 
@@ -171,6 +184,9 @@ async function clearIndexedCache() {
   return new Promise((resolve, reject) => {
     const transaction = db.transaction(repoStoreName, "readwrite")
     transaction.objectStore(repoStoreName).delete(cacheKey)
+    for (const key of previousCacheKeys) {
+      transaction.objectStore(repoStoreName).delete(key)
+    }
     transaction.oncomplete = () => resolve()
     transaction.onerror = () => reject(transaction.error)
   }).finally(() => db.close())
@@ -193,9 +209,12 @@ function normalizeGitHubRepo(repo) {
     disabled: Boolean(repo.disabled),
     private: Boolean(repo.private),
     fork: Boolean(repo.fork),
+    createdAt: repo.created_at ?? null,
     pushedAt: repo.pushed_at,
     updatedAt: repo.updated_at,
     starredAt: repo.starred_at ?? null,
+    hasReadme: false,
+    hasLicense: Boolean(repo.license),
   }
 }
 
@@ -207,11 +226,16 @@ function prepareRepo(repo) {
   const owner = repo.owner || ""
   const name = repo.name || ""
   const topicText = topics.join(" ")
+  const starRank = calculateStarRank({ ...repo, topics, language, description })
 
   return {
     ...repo,
     topics,
     language,
+    createdAt: repo.createdAt || null,
+    hasReadme: Boolean(repo.hasReadme),
+    hasLicense: Boolean(repo.hasLicense),
+    starRank,
     _search: [fullName, owner, name, description, language, topicText].join(" ").toLowerCase(),
     _nameSearch: fullName.toLowerCase(),
     _descriptionSearch: description.toLowerCase(),
@@ -219,7 +243,87 @@ function prepareRepo(repo) {
     _languageLower: (language || "").toLowerCase(),
     _updatedTime: Date.parse(repo.updatedAt || "") || 0,
     _starredTime: Date.parse(repo.starredAt || "") || 0,
+    _starRankScore: starRank?.score ?? -1,
   }
+}
+
+function calculateStarRank(repo, now = new Date()) {
+  if (!repo.createdAt) {
+    return null
+  }
+
+  const createdAt = new Date(repo.createdAt)
+  if (Number.isNaN(createdAt.getTime())) {
+    return null
+  }
+
+  const ageDays = Math.max(daysBetween(createdAt, now), 1)
+  const ageYears = Math.max(ageDays / 365.25, 0.25)
+  const starsPerYear = repo.stars / ageYears
+  const forksPerYear = repo.forks / ageYears
+  const starMomentumScore = Math.log10(starsPerYear + 1) * 50
+  const forkMomentumScore = Math.log10(forksPerYear + 1) * 25
+  const expectedForkRatio = expectedForkRatioForAge(ageDays)
+  const expectedForks = Math.max(repo.stars * expectedForkRatio, 1)
+  const forkSurprise = repo.forks / expectedForks
+  const cappedForkSurprise = Math.min(forkSurprise, 10)
+  const forkSurpriseScore = Math.log10(cappedForkSurprise + 1) * 20
+  const rawPopularityScore = Math.log10(repo.stars + 1) * 5
+  const rawForkScore = Math.log10(repo.forks + 1) * 3
+  const topicBonus = Math.min(repo.topics.length, 5) * 2
+  const descriptionBonus = repo.description?.trim() ? 3 : 0
+  const readmeBonus = repo.hasReadme ? 4 : 0
+  const licenseBonus = repo.hasLicense ? 3 : 0
+  const metadataBonus = Math.min(topicBonus + descriptionBonus + readmeBonus + licenseBonus, 20)
+  const baseScore =
+    starMomentumScore +
+    forkMomentumScore +
+    forkSurpriseScore +
+    rawPopularityScore +
+    rawForkScore
+  const finalScore = baseScore + metadataBonus
+  const score = Math.round(finalScore * 100) / 100
+
+  return {
+    score,
+    rankLabel: getStarRankLabel(score),
+    components: {
+      stars: repo.stars,
+      forks: repo.forks,
+      ageDays,
+      ageYears,
+      starsPerYear,
+      forksPerYear,
+      expectedForks,
+      forkSurprise,
+      starMomentumScore,
+      forkMomentumScore,
+      forkSurpriseScore,
+      rawPopularityScore,
+      rawForkScore,
+      metadataBonus,
+    },
+  }
+}
+
+function getStarRankLabel(score) {
+  if (score >= 100) return "Exceptional Momentum"
+  if (score >= 75) return "High Momentum"
+  if (score >= 50) return "Moderate Momentum"
+  if (score >= 25) return "Low Momentum"
+  return "Minimal Momentum"
+}
+
+function expectedForkRatioForAge(ageDays) {
+  if (ageDays < 90) return 0.01
+  if (ageDays < 365) return 0.03
+  if (ageDays < 1095) return 0.06
+  return 0.1
+}
+
+function daysBetween(start, end) {
+  const msPerDay = 1000 * 60 * 60 * 24
+  return Math.floor((end.getTime() - start.getTime()) / msPerDay)
 }
 
 function setRepos(repos, meta) {
@@ -529,6 +633,8 @@ function compareSearchResults(a, b) {
   switch (elements.sort.value) {
     case "stars":
       return b.repo.stars - a.repo.stars
+    case "starrank":
+      return b.repo._starRankScore - a.repo._starRankScore || b.repo.stars - a.repo.stars
     case "updated":
       return b.repo._updatedTime - a.repo._updatedTime
     case "starred":
@@ -589,6 +695,20 @@ function renderRepoCard(repo) {
   link.href = repo.htmlUrl
   node.querySelector(".repo-description").textContent = repo.description || "No description provided."
   node.querySelector(".repo-language").textContent = repo.language || "Unknown"
+  const starRank = node.querySelector(".repo-starrank")
+  starRank.textContent = repo.starRank ? `${repo.starRank.score.toLocaleString()} · ${repo.starRank.rankLabel}` : "Unavailable"
+  if (repo.starRank) {
+    const components = repo.starRank.components
+    starRank.title = [
+      `Stars/year: ${components.starsPerYear.toFixed(2)}`,
+      `Forks/year: ${components.forksPerYear.toFixed(2)}`,
+      `Fork surprise: ${components.forkSurprise.toFixed(2)}x`,
+      `Expected forks: ${components.expectedForks.toFixed(2)}`,
+      `Metadata bonus: ${components.metadataBonus}`,
+    ].join("\n")
+  } else {
+    starRank.title = "Reload stars or import data with createdAt to calculate StarRank."
+  }
   node.querySelector(".repo-stars").textContent = repo.stars.toLocaleString()
   node.querySelector(".repo-updated").textContent = formatDate(repo.updatedAt)
 
@@ -647,6 +767,8 @@ function stripPreparedFields(repo) {
     _languageLower,
     _updatedTime,
     _starredTime,
+    _starRankScore,
+    starRank,
     ...rawRepo
   } = repo
   return rawRepo
@@ -704,7 +826,9 @@ async function clearCache() {
     console.warn("IndexedDB cache clear failed", error)
   }
   localStorage.removeItem(cacheKey)
-  localStorage.removeItem(legacyCacheKey)
+  for (const key of previousCacheKeys) {
+    localStorage.removeItem(key)
+  }
   state.repos = []
   state.filtered = []
   state.cacheMeta = null
