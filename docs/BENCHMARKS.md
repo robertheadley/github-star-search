@@ -74,3 +74,18 @@
 - event-loop lag: Calculation is one-time per load/import/cache restore, while sorting reuses `_starRankScore`.
 - validation: `pnpm pages:check`, `pnpm check`, `pnpm build`, formula execution check, local HTTP verification, and browser StarRank sort smoke test passed.
 - risks: README bonus remains unavailable for GitHub API list results until optional README probing is implemented.
+
+## github-pages-table-results-20260529
+
+- timestamp: 2026-05-29T12:13:00-05:00
+- scenario: Spreadsheet-style repository table filtering and sorting for a large starred-repository list.
+- method: Inline Node benchmark generated 8,000 repository rows and repeatedly applied a name match, StarRank comparison filter, language filter, descending StarRank sort, and 100-row visible batch slice.
+- environment: Windows, Node.js via PowerShell, local repository checkout.
+- startup time: Not affected; static app still loads without a server in production.
+- latency: Average filter+sort time was 1.85 ms across 50 runs; p95 was 2.30 ms.
+- job duration: One benchmark process completed in about 400 ms including data generation and 50 repeated runs.
+- memory: Table uses the existing prepared repository objects and renders only the current 100-row batch.
+- CPU: Column filters use precomputed lowercase/search fields and numeric comparison parsing.
+- event-loop lag: Search and column filters remain debounced by 140 ms; visible table rendering is batched to 100 rows initially.
+- validation: `pnpm pages:check`, `pnpm check`, `pnpm build`, local HTTP check, and browser interaction checks passed.
+- risks: This is a lightweight browser data table, not a full spreadsheet engine.

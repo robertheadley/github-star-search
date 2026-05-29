@@ -110,6 +110,16 @@ const state = {
   cacheMeta: null,
   searchTimer: null,
   insightsBuilt: false,
+  sortDirection: "desc",
+  activeTableFilterColumn: null,
+  tableFilters: {
+    name: "",
+    stars: "",
+    starrank: "",
+    language: "",
+    updated: "",
+    age: "",
+  },
 }
 
 const elements = {
@@ -132,6 +142,7 @@ const elements = {
   hideForks: document.querySelector("#hide-forks"),
   exportButton: document.querySelector("#export-button"),
   exportDlcButton: document.querySelector("#export-dlc-button"),
+  clearTableFiltersButton: document.querySelector("#clear-table-filters-button"),
   importInput: document.querySelector("#import-input"),
   clearButton: document.querySelector("#clear-button"),
   correlationRepo: document.querySelector("#correlation-repo"),
@@ -161,12 +172,23 @@ function openCacheDatabase() {
 
 async function readIndexedCache() {
   const db = await openCacheDatabase()
-  return new Promise((resolve, reject) => {
-    const transaction = db.transaction(repoStoreName, "readonly")
-    const request = transaction.objectStore(repoStoreName).get(cacheKey)
-    request.onsuccess = () => resolve(request.result ?? null)
-    request.onerror = () => reject(request.error)
-  }).finally(() => db.close())
+  try {
+    for (const key of [cacheKey, ...previousCacheKeys]) {
+      const record = await new Promise((resolve, reject) => {
+        const transaction = db.transaction(repoStoreName, "readonly")
+        const store = transaction.objectStore(repoStoreName)
+        const request = store.get(key)
+        request.onsuccess = () => resolve(request.result ?? null)
+        request.onerror = () => reject(request.error)
+      })
+      if (record) {
+        return { ...record, cacheKey: key }
+      }
+    }
+    return null
+  } finally {
+    db.close()
+  }
 }
 
 async function writeIndexedCache(record) {
@@ -244,6 +266,8 @@ function prepareRepo(repo) {
     _updatedTime: Date.parse(repo.updatedAt || "") || 0,
     _starredTime: Date.parse(repo.starredAt || "") || 0,
     _starRankScore: starRank?.score ?? -1,
+    _ageDays: starRank?.components.ageDays ?? null,
+    _ageYears: starRank?.components.ageYears ?? null,
   }
 }
 
@@ -340,6 +364,14 @@ function setRepos(repos, meta) {
   applySearchNow()
 }
 
+function countReposMissingCreatedAt(repos) {
+  return repos.filter((repo) => !repo.createdAt).length
+}
+
+function isRefreshableCacheSource(source) {
+  return source && source !== "sample" && source !== "legacy" && source !== "import"
+}
+
 function parseNextLink(linkHeader) {
   if (!linkHeader) {
     return null
@@ -413,29 +445,61 @@ async function loadFromCache() {
     const cached = await readIndexedCache()
     if (Array.isArray(cached?.repos)) {
       setRepos(cached.repos, cached.meta)
-      const savedUser = localStorage.getItem("github-star-search:username") || (cached.meta?.source !== "sample" && cached.meta?.source !== "legacy" && cached.meta?.source !== "import" ? cached.meta?.source : "")
+      const savedUser = localStorage.getItem("github-star-search:username") || (isRefreshableCacheSource(cached.meta?.source) ? cached.meta.source : "")
       if (savedUser) elements.username.value = savedUser
       updateStatus(`Cached ${state.repos.length}`)
-      updateProgress(`Loaded ${state.repos.length} repositories from IndexedDB cache. Search is local now.`)
+      const missingCreatedAt = countReposMissingCreatedAt(cached.repos)
+      if (missingCreatedAt > 0 && savedUser) {
+        await refreshCacheForStarRank(savedUser, `Refreshing ${missingCreatedAt} cached repositories so StarRank has repository creation dates.`)
+      } else if (missingCreatedAt > 0) {
+        updateProgress(`Loaded ${state.repos.length} repositories from cache. StarRank needs repository creation dates, so reload stars from GitHub or import JSON with createdAt.`)
+      } else {
+        updateProgress(`Loaded ${state.repos.length} repositories from IndexedDB cache. Search is local now.`)
+      }
       return
     }
   } catch (error) {
     console.warn("IndexedDB cache unavailable", error)
   }
 
-  try {
-    const legacy = JSON.parse(localStorage.getItem(legacyCacheKey) || "null")
-    if (Array.isArray(legacy?.repos)) {
-      await saveToCache(legacy.repos, legacy.source || "legacy")
-      localStorage.removeItem(legacyCacheKey)
-      setRepos(legacy.repos, readCacheMeta())
-      const savedUser = localStorage.getItem("github-star-search:username") || (legacy.source !== "sample" && legacy.source !== "legacy" && legacy.source !== "import" ? legacy.source : "")
-      if (savedUser) elements.username.value = savedUser
-      updateStatus(`Cached ${state.repos.length}`)
-      updateProgress(`Migrated ${state.repos.length} repositories from the older browser cache.`)
+  for (const key of [cacheKey, ...previousCacheKeys]) {
+    try {
+      const legacy = JSON.parse(localStorage.getItem(key) || "null")
+      if (Array.isArray(legacy?.repos)) {
+        await saveToCache(legacy.repos, legacy.source || "legacy")
+        localStorage.removeItem(key)
+        setRepos(legacy.repos, readCacheMeta())
+        const savedUser = localStorage.getItem("github-star-search:username") || (isRefreshableCacheSource(legacy.source) ? legacy.source : "")
+        if (savedUser) elements.username.value = savedUser
+        updateStatus(`Cached ${state.repos.length}`)
+        const missingCreatedAt = countReposMissingCreatedAt(legacy.repos)
+        if (missingCreatedAt > 0 && savedUser) {
+          await refreshCacheForStarRank(savedUser, `Migrated ${state.repos.length} repositories from an older cache. Refreshing GitHub data so StarRank can be calculated.`)
+        } else if (missingCreatedAt > 0) {
+          updateProgress(`Migrated ${state.repos.length} repositories from an older cache. StarRank needs repository creation dates, so reload stars from GitHub or import JSON with createdAt.`)
+        } else {
+          updateProgress(`Migrated ${state.repos.length} repositories from the older browser cache.`)
+        }
+        return
+      }
+    } catch {
+      localStorage.removeItem(key)
     }
-  } catch {
-    localStorage.removeItem(legacyCacheKey)
+  }
+}
+
+async function refreshCacheForStarRank(username, message) {
+  updateStatus("Refreshing")
+  updateProgress(message)
+  try {
+    const repos = await fetchAllStars(username, elements.token.value.trim())
+    await saveToCache(repos, username)
+    setRepos(repos, state.cacheMeta)
+    updateStatus(`Loaded ${repos.length}`)
+    updateProgress(`Refreshed ${repos.length} repositories from GitHub. StarRank is now calculated from repository creation dates.`)
+  } catch (error) {
+    updateStatus(`Cached ${state.repos.length}`)
+    updateProgress(`${message} Refresh failed: ${error instanceof Error ? error.message : String(error)} Add a token if GitHub rate limits the refresh, then click Load starred repos.`)
   }
 }
 
@@ -532,6 +596,7 @@ function updateControls() {
   const hasRepos = state.repos.length > 0
   elements.exportButton.disabled = !hasRepos
   elements.exportDlcButton.disabled = !hasRepos
+  elements.clearTableFiltersButton.disabled = !hasRepos
   elements.clearButton.disabled = !hasRepos
   elements.correlationButton.disabled = !hasRepos
   updateCorrelationRepoOptions()
@@ -615,6 +680,9 @@ function applySearchNow() {
     if (hideForks && repo.fork) {
       continue
     }
+    if (!matchesTableFilters(repo)) {
+      continue
+    }
 
     const score = scoreRepo(repo, tokens)
     if (score >= 0) {
@@ -630,20 +698,120 @@ function applySearchNow() {
 }
 
 function compareSearchResults(a, b) {
+  const direction = state.sortDirection === "asc" ? 1 : -1
   switch (elements.sort.value) {
     case "stars":
-      return b.repo.stars - a.repo.stars
+      return (a.repo.stars - b.repo.stars) * direction
     case "starrank":
-      return b.repo._starRankScore - a.repo._starRankScore || b.repo.stars - a.repo.stars
+      return (a.repo._starRankScore - b.repo._starRankScore) * direction || b.repo.stars - a.repo.stars
+    case "language":
+      return a.repo._languageLower.localeCompare(b.repo._languageLower) * direction || a.repo.fullName.localeCompare(b.repo.fullName)
     case "updated":
-      return b.repo._updatedTime - a.repo._updatedTime
+      return (a.repo._updatedTime - b.repo._updatedTime) * direction
     case "starred":
-      return b.repo._starredTime - a.repo._starredTime
+      return (a.repo._starredTime - b.repo._starredTime) * direction
+    case "age":
+      return ((a.repo._ageDays ?? Number.MAX_SAFE_INTEGER) - (b.repo._ageDays ?? Number.MAX_SAFE_INTEGER)) * direction
     case "name":
-      return a.repo.fullName.localeCompare(b.repo.fullName)
+      return a.repo.fullName.localeCompare(b.repo.fullName) * direction
     default:
       return b.score - a.score || b.repo.stars - a.repo.stars
   }
+}
+
+function setSort(column) {
+  if (elements.sort.value === column) {
+    state.sortDirection = state.sortDirection === "asc" ? "desc" : "asc"
+  } else {
+    elements.sort.value = column
+    state.sortDirection = defaultSortDirection(column)
+  }
+  applySearchNow()
+}
+
+function defaultSortDirection(column) {
+  if (column === "name" || column === "language" || column === "age") {
+    return "asc"
+  }
+  return "desc"
+}
+
+function getSortLabel(column) {
+  if (elements.sort.value !== column) {
+    return ""
+  }
+  return state.sortDirection === "asc" ? " ↑" : " ↓"
+}
+
+function matchesTableFilters(repo) {
+  return (
+    matchesTextFilter(repo.fullName, state.tableFilters.name) &&
+    matchesNumberFilter(repo.stars, state.tableFilters.stars) &&
+    matchesNumberFilter(repo._starRankScore >= 0 ? repo._starRankScore : null, state.tableFilters.starrank) &&
+    matchesTextFilter(repo.language || "Unknown", state.tableFilters.language) &&
+    matchesDateFilter(repo.updatedAt, state.tableFilters.updated) &&
+    matchesAgeFilter(repo, state.tableFilters.age)
+  )
+}
+
+function matchesTextFilter(value, filter) {
+  const query = filter.trim().toLowerCase()
+  if (!query) {
+    return true
+  }
+  return String(value || "").toLowerCase().includes(query)
+}
+
+function matchesDateFilter(value, filter) {
+  const query = filter.trim().toLowerCase()
+  if (!query) {
+    return true
+  }
+  return [value || "", formatDate(value)].some((candidate) => candidate.toLowerCase().includes(query))
+}
+
+function matchesAgeFilter(repo, filter) {
+  const query = filter.trim().toLowerCase()
+  if (!query) {
+    return true
+  }
+  if (repo._ageDays === null) {
+    return false
+  }
+  if (matchesNumberFilter(repo._ageDays, query)) {
+    return true
+  }
+  if (query.endsWith("y") || query.includes("year")) {
+    return matchesNumberFilter(repo._ageYears, query.replace(/years?|y/g, "").trim())
+  }
+  return formatAge(repo).toLowerCase().includes(query)
+}
+
+function matchesNumberFilter(value, filter) {
+  const query = filter.trim().replace(/,/g, "")
+  if (!query) {
+    return true
+  }
+  if (value === null || value === undefined || Number.isNaN(value)) {
+    return false
+  }
+  const range = query.match(/^(-?\d+(?:\.\d+)?)\s*\.\.\s*(-?\d+(?:\.\d+)?)$/)
+  if (range) {
+    const min = Number(range[1])
+    const max = Number(range[2])
+    return value >= Math.min(min, max) && value <= Math.max(min, max)
+  }
+  const comparison = query.match(/^(>=|<=|>|<|=)?\s*(-?\d+(?:\.\d+)?)$/)
+  if (!comparison) {
+    return String(value).includes(query)
+  }
+  const operator = comparison[1] || "="
+  const target = Number(comparison[2])
+  if (operator === ">=") return value >= target
+  if (operator === "<=") return value <= target
+  if (operator === ">") return value > target
+  if (operator === "<") return value < target
+  return value === target
 }
 
 function formatDate(value) {
@@ -660,6 +828,19 @@ function formatDateTime(value) {
   return new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(new Date(value))
 }
 
+function formatAge(repo) {
+  if (repo._ageDays === null) {
+    return "Refresh needed"
+  }
+  if (repo._ageDays < 90) {
+    return `${repo._ageDays}d`
+  }
+  if (repo._ageDays < 730) {
+    return `${Math.round(repo._ageDays / 30)}mo`
+  }
+  return `${repo._ageYears.toFixed(1)}y`
+}
+
 function renderResults() {
   elements.resultCount.textContent = `${state.filtered.length} result${state.filtered.length === 1 ? "" : "s"}`
   elements.results.className = "results"
@@ -673,19 +854,159 @@ function renderResults() {
   }
 
   if (state.filtered.length === 0) {
-    elements.results.classList.add("empty-state")
-    elements.results.textContent = "No starred repositories match the current search."
+    elements.results.append(renderRepoTable([]))
+    restoreTableFilterFocus()
     return
   }
 
-  const fragment = document.createDocumentFragment()
-  for (const repo of state.filtered.slice(0, state.renderLimit)) {
-    fragment.append(renderRepoCard(repo))
-  }
-
-  elements.results.append(fragment)
+  const table = renderRepoTable(state.filtered.slice(0, state.renderLimit))
+  elements.results.append(table)
+  restoreTableFilterFocus()
   elements.showMoreButton.hidden = state.filtered.length <= state.renderLimit
   elements.showMoreButton.textContent = `Show ${Math.min(renderBatchSize, state.filtered.length - state.renderLimit)} more`
+}
+
+function renderRepoTable(repos) {
+  const shell = document.createElement("div")
+  shell.className = "result-table-shell"
+  const table = document.createElement("table")
+  table.className = "result-table"
+  table.append(renderTableHead(), renderTableBody(repos))
+  shell.append(table)
+  return shell
+}
+
+function renderTableHead() {
+  const head = document.createElement("thead")
+  const labels = document.createElement("tr")
+  const filters = document.createElement("tr")
+  filters.className = "table-filter-row"
+
+  for (const column of [
+    { key: "name", label: "Name", placeholder: "owner or repo" },
+    { key: "stars", label: "Stars", placeholder: ">=1000" },
+    { key: "starrank", label: "StarRank", placeholder: ">=75" },
+    { key: "language", label: "Language", placeholder: "TypeScript" },
+    { key: "updated", label: "Updated Date", placeholder: "2026" },
+    { key: "age", label: "Age", placeholder: "<365 or >2y" },
+  ]) {
+    const header = document.createElement("th")
+    const button = document.createElement("button")
+    button.className = "table-sort-button"
+    button.type = "button"
+    button.textContent = `${column.label}${getSortLabel(column.key)}`
+    button.addEventListener("click", () => setSort(column.key))
+    header.append(button)
+    labels.append(header)
+
+    const filterCell = document.createElement("th")
+    const input = document.createElement("input")
+    input.className = "table-filter"
+    input.dataset.column = column.key
+    input.placeholder = column.placeholder
+    input.value = state.tableFilters[column.key] || ""
+    input.addEventListener("input", handleTableFilterInput)
+    filterCell.append(input)
+    filters.append(filterCell)
+  }
+
+  head.append(labels, filters)
+  return head
+}
+
+function renderTableBody(repos) {
+  const body = document.createElement("tbody")
+  if (repos.length === 0) {
+    const row = document.createElement("tr")
+    const cell = document.createElement("td")
+    cell.className = "empty-table-cell"
+    cell.colSpan = 6
+    cell.textContent = "No starred repositories match the current filters."
+    row.append(cell)
+    body.append(row)
+    return body
+  }
+  for (const repo of repos) {
+    body.append(renderRepoRow(repo))
+  }
+  return body
+}
+
+function renderRepoRow(repo) {
+  const row = document.createElement("tr")
+  row.append(
+    renderNameCell(repo),
+    renderTextCell(repo.stars.toLocaleString(), "numeric"),
+    renderStarRankCell(repo),
+    renderTextCell(repo.language || "Unknown"),
+    renderTextCell(formatDate(repo.updatedAt)),
+    renderTextCell(formatAge(repo), "numeric"),
+  )
+  return row
+}
+
+function renderNameCell(repo) {
+  const cell = document.createElement("td")
+  const link = document.createElement("a")
+  link.className = "repo-table-name"
+  link.href = repo.htmlUrl
+  link.target = "_blank"
+  link.rel = "noreferrer"
+  link.textContent = repo.fullName
+  const description = document.createElement("div")
+  description.className = "repo-table-description"
+  description.textContent = repo.description || "No description provided."
+  cell.append(link, description)
+  return cell
+}
+
+function renderTextCell(value, className = "") {
+  const cell = document.createElement("td")
+  if (className) {
+    cell.className = className
+  }
+  cell.textContent = value
+  return cell
+}
+
+function renderStarRankCell(repo) {
+  const cell = document.createElement("td")
+  cell.className = "numeric repo-table-starrank"
+  if (repo.starRank) {
+    cell.textContent = repo.starRank.score.toLocaleString()
+    cell.title = repo.starRank.rankLabel
+  } else {
+    cell.textContent = "Refresh needed"
+    cell.title = "This cached or imported row is missing createdAt. Reload stars from GitHub or import JSON with createdAt to calculate StarRank."
+  }
+  return cell
+}
+
+function handleTableFilterInput(event) {
+  const column = event.currentTarget.dataset.column
+  state.activeTableFilterColumn = column
+  state.tableFilters[column] = event.currentTarget.value
+  queueSearch()
+}
+
+function clearTableFilters() {
+  for (const key of Object.keys(state.tableFilters)) {
+    state.tableFilters[key] = ""
+  }
+  state.activeTableFilterColumn = null
+  applySearchNow()
+}
+
+function restoreTableFilterFocus() {
+  if (!state.activeTableFilterColumn) {
+    return
+  }
+  const input = elements.results.querySelector(`.table-filter[data-column="${state.activeTableFilterColumn}"]`)
+  if (!input) {
+    return
+  }
+  input.focus()
+  input.setSelectionRange(input.value.length, input.value.length)
 }
 
 function renderRepoCard(repo) {
@@ -696,7 +1017,7 @@ function renderRepoCard(repo) {
   node.querySelector(".repo-description").textContent = repo.description || "No description provided."
   node.querySelector(".repo-language").textContent = repo.language || "Unknown"
   const starRank = node.querySelector(".repo-starrank")
-  starRank.textContent = repo.starRank ? `${repo.starRank.score.toLocaleString()} · ${repo.starRank.rankLabel}` : "Unavailable"
+  starRank.textContent = repo.starRank ? `${repo.starRank.score.toLocaleString()} · ${repo.starRank.rankLabel}` : "Refresh needed"
   if (repo.starRank) {
     const components = repo.starRank.components
     starRank.title = [
@@ -707,7 +1028,7 @@ function renderRepoCard(repo) {
       `Metadata bonus: ${components.metadataBonus}`,
     ].join("\n")
   } else {
-    starRank.title = "Reload stars or import data with createdAt to calculate StarRank."
+    starRank.title = "This cached or imported row is missing createdAt. Reload stars from GitHub or import JSON with createdAt to calculate StarRank."
   }
   node.querySelector(".repo-stars").textContent = repo.stars.toLocaleString()
   node.querySelector(".repo-updated").textContent = formatDate(repo.updatedAt)
@@ -1073,6 +1394,7 @@ elements.form.addEventListener("submit", handleLoad)
 elements.sampleButton.addEventListener("click", handleSample)
 elements.exportButton.addEventListener("click", handleExport)
 elements.exportDlcButton.addEventListener("click", handleExportDlc)
+elements.clearTableFiltersButton.addEventListener("click", clearTableFilters)
 elements.importInput.addEventListener("change", handleImport)
 elements.clearButton.addEventListener("click", clearCache)
 elements.correlationButton.addEventListener("click", buildCorrelations)
@@ -1082,6 +1404,9 @@ elements.correlationRepo.addEventListener("change", () => {
   }
 })
 elements.showMoreButton.addEventListener("click", showMoreResults)
+elements.sort.addEventListener("change", () => {
+  state.sortDirection = defaultSortDirection(elements.sort.value)
+})
 
 for (const input of [
   elements.query,

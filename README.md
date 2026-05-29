@@ -14,7 +14,8 @@ repositories without cloning thousands of repos.
   and license metadata.
 - Supports IndexedDB browser cache, JSON export, and JSON import.
 - Keeps large star lists responsive with debounced search, precomputed search
-  fields, batched rendering, and on-demand correlation analysis.
+  fields, batched rendering, spreadsheet-style column filters, and on-demand
+  correlation analysis.
 - Syncs your starred repositories from GitHub into a local cache.
 - Searches code remotely through GitHub's API, one starred repo at a time, so repositories do not need to be cloned.
 - Saves machine-readable JSON results for later filtering or import into other tools.
@@ -77,14 +78,20 @@ load the matching query or topic filter.
 
 StarRank is an age-adjusted repository momentum score. It favors repositories
 with current attention and developer reuse instead of only old accumulated star
-counts. The app shows the score and label on each result card and adds a
-StarRank sort option.
+counts. The app shows the score in a sortable table column and supports
+column-level filters for name, stars, StarRank, language, updated date, and age,
+with a clear-table-filters control for resetting the grid.
 
 The current GitHub starred-repository API response provides creation date,
 stars, forks, topics, description, and license metadata. README presence is not
 proven by that list response, so the README bonus is applied only when imported
 data explicitly includes `hasReadme: true`; optional README fetching is tracked
 as future work.
+
+Older browser caches created before StarRank may not include `createdAt`. When
+that happens, the app refreshes GitHub-sourced caches from the starred
+repositories API so StarRank can be calculated instead of guessing repository
+age.
 
 ## Requirements
 

@@ -97,8 +97,10 @@
               <option value="best">Best match</option>
               <option value="starrank">StarRank</option>
               <option value="stars">Most stars</option>
+              <option value="language">Language</option>
               <option value="updated">Recently updated</option>
               <option value="starred">Recently starred</option>
+              <option value="age">Age</option>
               <option value="name">Name</option>
             </select>
           </label>
@@ -113,6 +115,7 @@
         <div class="toolbar">
           <button id="export-button" class="secondary-button" type="button" disabled>Export JSON</button>
           <button id="export-dlc-button" class="secondary-button" type="button" disabled>Export Readmes</button>
+          <button id="clear-table-filters-button" class="secondary-button" type="button" disabled>Clear table filters</button>
           <label class="import-button">
             Import JSON
             <input id="import-input" type="file" accept="application/json,.json" />
@@ -168,6 +171,6 @@
       </article>
     </template>
 
-    <script src="./app.js?v=20260529-starrank" defer></script>
+    <script src="./app.js?v=20260529-table" defer></script>
   </body>
 </html>

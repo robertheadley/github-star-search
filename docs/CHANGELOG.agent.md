@@ -71,3 +71,27 @@
 - performance: StarRank is calculated once per repository during prepare/load and reused for sorting/rendering.
 - risks: README presence is not proven by the current starred-repository list response, so the README bonus is applied only when imported data explicitly includes `hasReadme: true`.
 - follow_up: Add optional README probing or manifest indexing if exact README metadata becomes important.
+
+## github-pages-starrank-cache-refresh-20260529
+
+- timestamp: 2026-05-29T11:52:00-05:00
+- what: Added automatic StarRank cache recovery for older browser caches that lack repository creation dates.
+- why: Upgraded cached/imported rows without `createdAt` rendered `Refresh needed` instead of a StarRank value; GitHub-sourced caches can be refreshed from the starred repositories API to recover the required age signal.
+- components: `docs/app.js`, `docs/index.html`, `README.md`, `docs/CHANGELOG.agent.md`, `docs/EXECUTION_LOGS.md`
+- type: bugfix
+- validation: `pnpm pages:check`, `pnpm check`, `pnpm build`, local HTTP check, and browser smoke checks passed.
+- performance: Refresh uses the existing paginated starred-repositories request path instead of per-repository backfill calls.
+- risks: Imported JSON without `createdAt` still cannot be scored unless reimported with creation dates or reloaded from GitHub by username.
+- follow_up: Consider an explicit UI refresh button if users frequently import old JSON exports.
+
+## github-pages-table-results-20260529
+
+- timestamp: 2026-05-29T12:02:00-05:00
+- what: Replaced result cards with a spreadsheet-style repository table and clear-table-filters control.
+- why: The user wanted an Excel-like column display with sortable Name, Stars, StarRank, Language, Updated Date, and Age fields plus per-column filter search.
+- components: `docs/app.js`, `docs/index.html`, `docs/styles.css`, `README.md`, `docs/ROADMAP.md`, `docs/CHANGELOG.agent.md`, `docs/EXECUTION_LOGS.md`
+- type: feature
+- validation: `pnpm pages:check`, `pnpm check`, `pnpm build`, local HTTP check, and browser interaction checks passed.
+- performance: Table rendering remains batched to the existing visible result limit and filters run against precomputed row fields; 8,000-row synthetic table filter+sort averaged 1.85 ms with p95 2.30 ms.
+- risks: Numeric filters support comparison and range syntax, but this is a lightweight browser table rather than a full spreadsheet engine.
+- follow_up: Add saved table views if users want persistent column filter presets.
