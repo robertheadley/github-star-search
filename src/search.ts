@@ -1,4 +1,5 @@
 import type { StarredRepo } from "./types.js"
+import { parseQuery, scoreRepoForQuery } from "./core.js"
 
 export type MetadataSearchOptions = {
   query: string
@@ -8,12 +9,9 @@ export type MetadataSearchOptions = {
   limit?: number
 }
 
-function includesText(value: string | null | undefined, query: string): boolean {
-  return (value ?? "").toLowerCase().includes(query.toLowerCase())
-}
-
 export function searchStarredRepos(repos: StarredRepo[], options: MetadataSearchOptions): StarredRepo[] {
-  const query = options.query.trim().toLowerCase()
+  const parsed = parseQuery(options.query)
+  if (parsed.error) throw new Error(parsed.error)
   const limit = options.limit ?? 100
 
   const results = repos.filter((repo) => {
@@ -29,16 +27,7 @@ export function searchStarredRepos(repos: StarredRepo[], options: MetadataSearch
       return false
     }
 
-    if (!query) {
-      return true
-    }
-
-    return (
-      includesText(repo.fullName, query) ||
-      includesText(repo.description, query) ||
-      includesText(repo.language, query) ||
-      repo.topics.some((topic) => includesText(topic, query))
-    )
+    return scoreRepoForQuery(repo, parsed) >= 0
   })
 
   return results.slice(0, limit)

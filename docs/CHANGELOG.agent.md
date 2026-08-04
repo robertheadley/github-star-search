@@ -95,3 +95,15 @@
 - performance: Table rendering remains batched to the existing visible result limit and filters run against precomputed row fields; 8,000-row synthetic table filter+sort averaged 1.85 ms with p95 2.30 ms.
 - risks: Numeric filters support comparison and range syntax, but this is a lightweight browser table rather than a full spreadsheet engine.
 - follow_up: Add saved table views if users want persistent column filter presets.
+## github-star-search-v02-20260804
+
+- id: github-star-search-v02-20260804
+- timestamp: 2026-08-04T14:13:08-05:00
+- what: Implemented the review's focused v0.2 release: shared TypeScript query and StarRank core, field qualifiers, phrases/exclusions/OR, help and removable chips, cache freshness and refresh cues, URL and saved-search state, explicit export scopes, versioned import validation, cache confirmation, privacy copy, and automated product proof.
+- why: The public UI advertised query syntax it did not interpret, stale data lacked an explicit warning, user research state was disposable, exports/imports were ambiguous, and CI proved only type/build success.
+- components: `src/core.ts`, CLI search/StarRank/GitHub mapping, generated `docs/core.js`, Pages HTML/CSS/app, tests, Playwright configuration, CI, scripts, README, roadmap, benchmarks, and agent journals.
+- type: feature, reliability, safety, test, accessibility, documentation
+- validation: `pnpm check`, `pnpm build`, `pnpm test` (6/6), `pnpm pages:check`, `pnpm test:e2e` (7/7), `pnpm pages:smoke`, zero-advisory `pnpm audit`, query benchmark, and `git diff --check`.
+- performance: Field-aware filtering over 8,000 deterministic repositories averaged 1.39 ms with 2.10 ms p95; detailed comparison is in `docs/BENCHMARKS.md`.
+- risks: OAuth/device flow, resumable/rate-limit-aware synchronization, notes/collections, repository details, and explainable StarRank remain intentionally deferred to the review's v0.3 follow-up.
+- follow_up: Implement the documented v0.3 synchronization/authentication and personal-research features as a separate release.

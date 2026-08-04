@@ -27,7 +27,10 @@
       <section class="panel setup-panel" aria-labelledby="setup-heading">
         <div class="section-heading">
           <h2 id="setup-heading">Load Stars</h2>
-          <span id="connection-status" class="status-pill">Not loaded</span>
+          <div class="status-group">
+            <span id="cache-age" class="status-pill" hidden></span>
+            <span id="connection-status" class="status-pill">Not loaded</span>
+          </div>
         </div>
 
         <form id="load-form" class="load-form">
@@ -55,9 +58,15 @@
 
           <div class="form-actions">
             <button id="load-button" type="submit">Load starred repos</button>
+            <button id="refresh-button" class="secondary-button" type="button" hidden>Refresh stale data</button>
             <button id="sample-button" class="secondary-button" type="button">Try sample data</button>
           </div>
         </form>
+
+        <p class="privacy-note">
+          Your token is sent only to GitHub, never saved, and cleared from this field as soon as loading starts.
+          Public stars work without a token; a token only raises GitHub's API limit.
+        </p>
 
         <div id="progress" class="progress" role="status" aria-live="polite">
           Enter a username to fetch public starred repositories. Add a token
@@ -106,6 +115,29 @@
           </label>
         </div>
 
+        <div id="query-error" class="query-error" role="alert" hidden></div>
+        <div id="active-filters" class="active-filters" role="group" aria-label="Active query filters"></div>
+
+        <details class="query-help">
+          <summary>Query help and examples</summary>
+          <p>Combine words, quoted phrases, exact field filters, exclusions, and OR.</p>
+          <div class="example-actions">
+            <button class="query-example secondary-button" type="button" data-query="topic:mcp language:TypeScript">TypeScript MCP</button>
+            <button class="query-example secondary-button" type="button" data-query='"command line" -archived'>Active command-line tools</button>
+            <button class="query-example secondary-button" type="button" data-query="owner:github OR license:MIT">GitHub or MIT</button>
+          </div>
+          <p class="help-copy">Supported filters: <code>topic:</code>, <code>language:</code>, <code>owner:</code>, and <code>license:</code>. Prefix a term or filter with <code>-</code> to exclude it.</p>
+        </details>
+
+        <div class="saved-searches">
+          <label>
+            Saved searches
+            <select id="saved-search-select"><option value="">Choose a saved search</option></select>
+          </label>
+          <button id="save-search-button" class="secondary-button" type="button">Save current search</button>
+          <button id="delete-search-button" class="secondary-button danger-button" type="button" disabled>Delete selected</button>
+        </div>
+
         <div class="filters">
           <label><input id="include-archived" type="checkbox" /> Include archived</label>
           <label><input id="forks-only" type="checkbox" /> Forks only</label>
@@ -113,7 +145,8 @@
         </div>
 
         <div class="toolbar">
-          <button id="export-button" class="secondary-button" type="button" disabled>Export JSON</button>
+          <button id="export-results-button" class="secondary-button" type="button" disabled>Export current results</button>
+          <button id="export-all-button" class="secondary-button" type="button" disabled>Export all repositories</button>
           <button id="export-dlc-button" class="secondary-button" type="button" disabled>Export Readmes</button>
           <button id="clear-table-filters-button" class="secondary-button" type="button" disabled>Clear table filters</button>
           <label class="import-button">
@@ -122,8 +155,8 @@
           </label>
           <button id="clear-button" class="secondary-button danger-button" type="button" disabled>Clear cache</button>
         </div>
-        <p style="font-size: 0.85rem; color: #6e7681; margin-top: 0.5rem; text-align: center;">
-          Load the exported Readmes list into your download manager of choice to maintain a local copy of all starred readmes.
+        <p class="help-copy centered">
+          JSON exports use a versioned schema. “Current results” includes the active query and filters; “all repositories” includes the complete loaded cache. Readmes exports the complete loaded list.
         </p>
       </section>
 
@@ -171,6 +204,6 @@
       </article>
     </template>
 
-    <script src="./app.js?v=20260529-table" defer></script>
+    <script type="module" src="./app.js?v=20260804-v02"></script>
   </body>
 </html>

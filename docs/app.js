@@ -1,3 +1,5 @@
+import { calculateStarRank, createRepoExport, parseQuery, scoreRepoForQuery, validateRepoImport } from "./core.js"
+
 const cacheKey = "github-star-search:repos:v3"
 const legacyCacheKey = "github-star-search:repos:v1"
 const previousCacheKeys = ["github-star-search:repos:v2", legacyCacheKey]
@@ -5,6 +7,8 @@ const databaseName = "github-star-search"
 const repoStoreName = "repo-cache"
 const initialRenderLimit = 100
 const renderBatchSize = 100
+const savedSearchesKey = "github-star-search:saved-searches:v1"
+const maxImportBytes = 25 * 1024 * 1024
 
 const sampleRepos = [
   {
@@ -28,6 +32,7 @@ const sampleRepos = [
     starredAt: "2026-05-24T15:00:00Z",
     hasReadme: true,
     hasLicense: true,
+    license: "MIT",
   },
   {
     id: 2,
@@ -50,6 +55,7 @@ const sampleRepos = [
     starredAt: "2026-05-23T18:30:00Z",
     hasReadme: true,
     hasLicense: true,
+    license: "CC-BY-4.0",
   },
   {
     id: 3,
@@ -72,6 +78,7 @@ const sampleRepos = [
     starredAt: "2026-05-22T14:00:00Z",
     hasReadme: true,
     hasLicense: true,
+    license: "MIT",
   },
 ]
 
@@ -99,6 +106,7 @@ for (let index = 0; index < 720; index += 1) {
     starredAt: "2026-05-21T00:00:00Z",
     hasReadme: true,
     hasLicense: index % 5 !== 0,
+    license: index % 5 !== 0 ? "MIT" : null,
   })
 }
 
@@ -112,6 +120,8 @@ const state = {
   insightsBuilt: false,
   sortDirection: "desc",
   activeTableFilterColumn: null,
+  parsedQuery: parseQuery(""),
+  restoringUrl: false,
   tableFilters: {
     name: "",
     stars: "",
@@ -127,24 +137,32 @@ const elements = {
   username: document.querySelector("#username"),
   token: document.querySelector("#token"),
   loadButton: document.querySelector("#load-button"),
+  refreshButton: document.querySelector("#refresh-button"),
   sampleButton: document.querySelector("#sample-button"),
   progress: document.querySelector("#progress"),
   status: document.querySelector("#connection-status"),
   cacheSummary: document.querySelector("#cache-summary"),
+  cacheAge: document.querySelector("#cache-age"),
   query: document.querySelector("#query"),
   language: document.querySelector("#language"),
   languageList: document.querySelector("#language-list"),
   topic: document.querySelector("#topic"),
   topicList: document.querySelector("#topic-list"),
+  queryError: document.querySelector("#query-error"),
+  activeFilters: document.querySelector("#active-filters"),
   sort: document.querySelector("#sort"),
   includeArchived: document.querySelector("#include-archived"),
   forksOnly: document.querySelector("#forks-only"),
   hideForks: document.querySelector("#hide-forks"),
-  exportButton: document.querySelector("#export-button"),
+  exportResultsButton: document.querySelector("#export-results-button"),
+  exportAllButton: document.querySelector("#export-all-button"),
   exportDlcButton: document.querySelector("#export-dlc-button"),
   clearTableFiltersButton: document.querySelector("#clear-table-filters-button"),
   importInput: document.querySelector("#import-input"),
   clearButton: document.querySelector("#clear-button"),
+  savedSearchSelect: document.querySelector("#saved-search-select"),
+  saveSearchButton: document.querySelector("#save-search-button"),
+  deleteSearchButton: document.querySelector("#delete-search-button"),
   correlationRepo: document.querySelector("#correlation-repo"),
   correlationButton: document.querySelector("#correlation-button"),
   correlations: document.querySelector("#correlations"),
@@ -237,6 +255,7 @@ function normalizeGitHubRepo(repo) {
     starredAt: repo.starred_at ?? null,
     hasReadme: false,
     hasLicense: Boolean(repo.license),
+    license: repo.license?.spdx_id || repo.license?.name || null,
   }
 }
 
@@ -269,85 +288,6 @@ function prepareRepo(repo) {
     _ageDays: starRank?.components.ageDays ?? null,
     _ageYears: starRank?.components.ageYears ?? null,
   }
-}
-
-function calculateStarRank(repo, now = new Date()) {
-  if (!repo.createdAt) {
-    return null
-  }
-
-  const createdAt = new Date(repo.createdAt)
-  if (Number.isNaN(createdAt.getTime())) {
-    return null
-  }
-
-  const ageDays = Math.max(daysBetween(createdAt, now), 1)
-  const ageYears = Math.max(ageDays / 365.25, 0.25)
-  const starsPerYear = repo.stars / ageYears
-  const forksPerYear = repo.forks / ageYears
-  const starMomentumScore = Math.log10(starsPerYear + 1) * 50
-  const forkMomentumScore = Math.log10(forksPerYear + 1) * 25
-  const expectedForkRatio = expectedForkRatioForAge(ageDays)
-  const expectedForks = Math.max(repo.stars * expectedForkRatio, 1)
-  const forkSurprise = repo.forks / expectedForks
-  const cappedForkSurprise = Math.min(forkSurprise, 10)
-  const forkSurpriseScore = Math.log10(cappedForkSurprise + 1) * 20
-  const rawPopularityScore = Math.log10(repo.stars + 1) * 5
-  const rawForkScore = Math.log10(repo.forks + 1) * 3
-  const topicBonus = Math.min(repo.topics.length, 5) * 2
-  const descriptionBonus = repo.description?.trim() ? 3 : 0
-  const readmeBonus = repo.hasReadme ? 4 : 0
-  const licenseBonus = repo.hasLicense ? 3 : 0
-  const metadataBonus = Math.min(topicBonus + descriptionBonus + readmeBonus + licenseBonus, 20)
-  const baseScore =
-    starMomentumScore +
-    forkMomentumScore +
-    forkSurpriseScore +
-    rawPopularityScore +
-    rawForkScore
-  const finalScore = baseScore + metadataBonus
-  const score = Math.round(finalScore * 100) / 100
-
-  return {
-    score,
-    rankLabel: getStarRankLabel(score),
-    components: {
-      stars: repo.stars,
-      forks: repo.forks,
-      ageDays,
-      ageYears,
-      starsPerYear,
-      forksPerYear,
-      expectedForks,
-      forkSurprise,
-      starMomentumScore,
-      forkMomentumScore,
-      forkSurpriseScore,
-      rawPopularityScore,
-      rawForkScore,
-      metadataBonus,
-    },
-  }
-}
-
-function getStarRankLabel(score) {
-  if (score >= 100) return "Exceptional Momentum"
-  if (score >= 75) return "High Momentum"
-  if (score >= 50) return "Moderate Momentum"
-  if (score >= 25) return "Low Momentum"
-  return "Minimal Momentum"
-}
-
-function expectedForkRatioForAge(ageDays) {
-  if (ageDays < 90) return 0.01
-  if (ageDays < 365) return 0.03
-  if (ageDays < 1095) return 0.06
-  return 0.1
-}
-
-function daysBetween(start, end) {
-  const msPerDay = 1000 * 60 * 60 * 24
-  return Math.floor((end.getTime() - start.getTime()) / msPerDay)
 }
 
 function setRepos(repos, meta) {
@@ -550,11 +490,23 @@ function updateCacheSummary() {
   if (!meta?.savedAt) {
     elements.cacheSummary.hidden = true
     elements.cacheSummary.textContent = ""
+    elements.cacheAge.hidden = true
+    elements.refreshButton.hidden = true
     return
   }
 
+  const age = getCacheAge(meta.savedAt)
   elements.cacheSummary.hidden = false
-  elements.cacheSummary.textContent = `Cache: ${meta.count?.toLocaleString?.() ?? state.repos.length.toLocaleString()} repos from ${meta.source || "unknown"} saved ${formatDateTime(meta.savedAt)}.`
+  elements.cacheSummary.textContent = `Cache: ${meta.count?.toLocaleString?.() ?? state.repos.length.toLocaleString()} repos from ${meta.source || "unknown"} saved ${formatDateTime(meta.savedAt)} (${age.days} days ago).`
+  elements.cacheAge.hidden = false
+  elements.cacheAge.className = `status-pill ${age.label.toLowerCase()}`
+  elements.cacheAge.textContent = age.label
+  elements.refreshButton.hidden = age.label !== "Stale" || !isRefreshableCacheSource(meta.source)
+}
+
+function getCacheAge(savedAt) {
+  const days = Math.max(0, Math.floor((Date.now() - Date.parse(savedAt)) / 86_400_000))
+  return { days, label: days <= 7 ? "Fresh" : days <= 30 ? "Aging" : "Stale" }
 }
 
 function uniqueSorted(values) {
@@ -594,7 +546,8 @@ function updateControls() {
   populateDatalist(elements.topicList, topTopics, 500)
 
   const hasRepos = state.repos.length > 0
-  elements.exportButton.disabled = !hasRepos
+  elements.exportResultsButton.disabled = !hasRepos
+  elements.exportAllButton.disabled = !hasRepos
   elements.exportDlcButton.disabled = !hasRepos
   elements.clearTableFiltersButton.disabled = !hasRepos
   elements.clearButton.disabled = !hasRepos
@@ -614,48 +567,19 @@ function updateCorrelationRepoOptions() {
   }
 }
 
-function tokenizeQuery(query) {
-  return query
-    .trim()
-    .toLowerCase()
-    .split(/\s+/)
-    .filter(Boolean)
-}
-
-function scoreRepo(repo, tokens) {
-  if (tokens.length === 0) {
-    return 1
-  }
-
-  let score = 0
-  for (const token of tokens) {
-    if (!repo._search.includes(token)) {
-      return -1
-    }
-    if (repo._nameSearch.includes(token)) {
-      score += 8
-    }
-    if (repo._descriptionSearch.includes(token)) {
-      score += 3
-    }
-    if (repo._topicsLower.some((topic) => topic.includes(token))) {
-      score += 4
-    }
-    if (repo._languageLower === token) {
-      score += 5
-    }
-  }
-
-  return score
-}
-
 function queueSearch() {
   window.clearTimeout(state.searchTimer)
   state.searchTimer = window.setTimeout(applySearchNow, 140)
 }
 
 function applySearchNow() {
-  const tokens = tokenizeQuery(elements.query.value)
+  state.parsedQuery = parseQuery(elements.query.value)
+  renderParsedQuery()
+  if (state.parsedQuery.error) {
+    state.filtered = []
+    renderResults()
+    return
+  }
   const language = elements.language.value
   const topic = elements.topic.value
   const topicLower = topic.toLowerCase()
@@ -684,7 +608,7 @@ function applySearchNow() {
       continue
     }
 
-    const score = scoreRepo(repo, tokens)
+    const score = scoreRepoForQuery(repo, state.parsedQuery)
     if (score >= 0) {
       matches.push({ repo, score })
     }
@@ -695,6 +619,89 @@ function applySearchNow() {
   state.renderLimit = initialRenderLimit
   renderResults()
   updateCorrelationRepoOptions()
+  writeUrlState()
+}
+
+function renderParsedQuery() {
+  elements.queryError.hidden = !state.parsedQuery.error
+  elements.queryError.textContent = state.parsedQuery.error || ""
+  elements.activeFilters.replaceChildren()
+  state.parsedQuery.clauses.forEach((clause, index) => {
+    if (clause.kind === "term" && !clause.exclude) return
+    const button = document.createElement("button")
+    button.type = "button"
+    button.className = "filter-chip"
+    button.textContent = `${clause.exclude ? "−" : ""}${clause.field ? `${clause.field}:` : ""}${clause.value} ×`
+    button.setAttribute("aria-label", `Remove filter ${button.textContent.slice(0, -2)}`)
+    button.addEventListener("click", () => removeQueryClause(index))
+    elements.activeFilters.append(button)
+  })
+}
+
+function removeQueryClause(removeIndex) {
+  let index = 0
+  elements.query.value = state.parsedQuery.groups
+    .map((group) => group.filter(() => index++ !== removeIndex).map(serializeClause).join(" "))
+    .filter(Boolean)
+    .join(" OR ")
+  applySearchNow()
+}
+
+function serializeClause(clause) {
+  const value = clause.value.includes(" ") ? `"${clause.value}"` : clause.value
+  return `${clause.exclude ? "-" : ""}${clause.field ? `${clause.field}:` : ""}${value}`
+}
+
+function currentSearchState() {
+  return {
+    query: elements.query.value,
+    language: elements.language.value,
+    topic: elements.topic.value,
+    sort: elements.sort.value,
+    includeArchived: elements.includeArchived.checked,
+    forksOnly: elements.forksOnly.checked,
+    hideForks: elements.hideForks.checked,
+  }
+}
+
+function applySearchState(saved) {
+  elements.query.value = saved.query || ""
+  elements.language.value = saved.language || ""
+  elements.topic.value = saved.topic || ""
+  elements.sort.value = saved.sort || "best"
+  elements.includeArchived.checked = Boolean(saved.includeArchived)
+  elements.forksOnly.checked = Boolean(saved.forksOnly)
+  elements.hideForks.checked = Boolean(saved.hideForks)
+  state.sortDirection = defaultSortDirection(elements.sort.value)
+}
+
+function writeUrlState() {
+  if (state.restoringUrl) return
+  const saved = currentSearchState()
+  const params = new URLSearchParams()
+  if (saved.query) params.set("q", saved.query)
+  if (saved.language) params.set("language", saved.language)
+  if (saved.topic) params.set("topic", saved.topic)
+  if (saved.sort !== "best") params.set("sort", saved.sort)
+  if (saved.includeArchived) params.set("archived", "1")
+  if (saved.forksOnly) params.set("forks", "only")
+  if (saved.hideForks) params.set("forks", "hide")
+  history.replaceState(null, "", `${location.pathname}${params.size ? `?${params}` : ""}${location.hash}`)
+}
+
+function restoreUrlState() {
+  const params = new URLSearchParams(location.search)
+  state.restoringUrl = true
+  applySearchState({
+    query: params.get("q") || "",
+    language: params.get("language") || "",
+    topic: params.get("topic") || "",
+    sort: params.get("sort") || "best",
+    includeArchived: params.get("archived") === "1",
+    forksOnly: params.get("forks") === "only",
+    hideForks: params.get("forks") === "hide",
+  })
+  state.restoringUrl = false
 }
 
 function compareSearchResults(a, b) {
@@ -1058,8 +1065,10 @@ async function handleLoad(event) {
 
   try {
     const source = elements.username.value.trim()
+    const token = elements.token.value.trim()
+    elements.token.value = ""
     localStorage.setItem("github-star-search:username", source)
-    const repos = await fetchAllStars(source, elements.token.value.trim())
+    const repos = await fetchAllStars(source, token)
     await saveToCache(repos, source)
     setRepos(repos, state.cacheMeta)
     updateStatus(`Loaded ${repos.length}`)
@@ -1089,19 +1098,22 @@ function stripPreparedFields(repo) {
     _updatedTime,
     _starredTime,
     _starRankScore,
+    _ageDays,
+    _ageYears,
     starRank,
     ...rawRepo
   } = repo
   return rawRepo
 }
 
-function handleExport() {
-  const rawRepos = state.repos.map(stripPreparedFields)
-  const blob = new Blob([`${JSON.stringify(rawRepos, null, 2)}\n`], { type: "application/json" })
+function handleExport(repos, scope) {
+  const rawRepos = repos.map(stripPreparedFields)
+  const payload = createRepoExport(rawRepos, scope)
+  const blob = new Blob([`${JSON.stringify(payload, null, 2)}\n`], { type: "application/json" })
   const url = URL.createObjectURL(blob)
   const anchor = document.createElement("a")
   anchor.href = url
-  anchor.download = "github-star-search-export.json"
+  anchor.download = `github-star-search-${scope}.v1.json`
   anchor.click()
   URL.revokeObjectURL(url)
 }
@@ -1124,14 +1136,12 @@ async function handleImport(event) {
   }
 
   try {
-    const repos = JSON.parse(await file.text())
-    if (!Array.isArray(repos)) {
-      throw new Error("Imported file must contain an array of repositories.")
-    }
+    if (file.size > maxImportBytes) throw new Error("Import is larger than the supported 25 MB limit. Split it into smaller files.")
+    const { repos, migratedLegacy } = validateRepoImport(JSON.parse(await file.text()))
     await saveToCache(repos, "import")
     setRepos(repos, state.cacheMeta)
     updateStatus(`Imported ${repos.length}`)
-    updateProgress(`Imported and cached ${repos.length} repositories from ${file.name}.`)
+    updateProgress(`Imported and cached ${repos.length} repositories from ${file.name}.${migratedLegacy ? " Legacy array format was migrated to schema version 1." : " Schema version 1 validated."}`)
   } catch (error) {
     updateStatus("Import error")
     updateProgress(error instanceof Error ? error.message : String(error))
@@ -1141,6 +1151,7 @@ async function handleImport(event) {
 }
 
 async function clearCache() {
+  if (!window.confirm(`Clear ${state.repos.length.toLocaleString()} cached repositories from this browser? This cannot be undone unless you reload or re-import them.`)) return
   try {
     await clearIndexedCache()
   } catch (error) {
@@ -1163,6 +1174,52 @@ async function clearCache() {
   renderResults()
   updateStatus("Not loaded")
   updateProgress("Cache cleared. Enter a username to load starred repositories.")
+}
+
+function readSavedSearches() {
+  try {
+    const value = JSON.parse(localStorage.getItem(savedSearchesKey) || "[]")
+    return Array.isArray(value) ? value.filter((item) => item && typeof item.name === "string" && item.state) : []
+  } catch {
+    localStorage.removeItem(savedSearchesKey)
+    return []
+  }
+}
+
+function renderSavedSearches(selectedName = "") {
+  const searches = readSavedSearches()
+  elements.savedSearchSelect.replaceChildren(new Option("Choose a saved search", ""))
+  searches.forEach((search) => elements.savedSearchSelect.append(new Option(search.name, search.name)))
+  elements.savedSearchSelect.value = searches.some((search) => search.name === selectedName) ? selectedName : ""
+  elements.deleteSearchButton.disabled = !elements.savedSearchSelect.value
+}
+
+function saveCurrentSearch() {
+  const suggested = elements.query.value.trim() || "All repositories"
+  const name = window.prompt("Name this saved search:", suggested)?.trim()
+  if (!name) return
+  const searches = readSavedSearches().filter((search) => search.name !== name)
+  searches.push({ name, state: currentSearchState() })
+  searches.sort((a, b) => a.name.localeCompare(b.name))
+  localStorage.setItem(savedSearchesKey, JSON.stringify(searches))
+  renderSavedSearches(name)
+  updateProgress(`Saved search “${name}” in this browser.`)
+}
+
+function loadSelectedSearch() {
+  const selected = readSavedSearches().find((search) => search.name === elements.savedSearchSelect.value)
+  elements.deleteSearchButton.disabled = !selected
+  if (!selected) return
+  applySearchState(selected.state)
+  applySearchNow()
+}
+
+function deleteSelectedSearch() {
+  const name = elements.savedSearchSelect.value
+  if (!name) return
+  localStorage.setItem(savedSearchesKey, JSON.stringify(readSavedSearches().filter((search) => search.name !== name)))
+  renderSavedSearches()
+  updateProgress(`Deleted saved search “${name}”.`)
 }
 
 function buildCorrelations() {
@@ -1391,8 +1448,10 @@ function showMoreResults() {
 }
 
 elements.form.addEventListener("submit", handleLoad)
+elements.refreshButton.addEventListener("click", () => elements.form.requestSubmit())
 elements.sampleButton.addEventListener("click", handleSample)
-elements.exportButton.addEventListener("click", handleExport)
+elements.exportResultsButton.addEventListener("click", () => handleExport(state.filtered, "results"))
+elements.exportAllButton.addEventListener("click", () => handleExport(state.repos, "all"))
 elements.exportDlcButton.addEventListener("click", handleExportDlc)
 elements.clearTableFiltersButton.addEventListener("click", clearTableFilters)
 elements.importInput.addEventListener("change", handleImport)
@@ -1404,6 +1463,17 @@ elements.correlationRepo.addEventListener("change", () => {
   }
 })
 elements.showMoreButton.addEventListener("click", showMoreResults)
+elements.saveSearchButton.addEventListener("click", saveCurrentSearch)
+elements.savedSearchSelect.addEventListener("change", loadSelectedSearch)
+elements.deleteSearchButton.addEventListener("click", deleteSelectedSearch)
+document.querySelectorAll(".query-example").forEach((button) => button.addEventListener("click", () => {
+  elements.query.value = button.dataset.query || ""
+  applySearchNow()
+}))
+window.addEventListener("popstate", () => {
+  restoreUrlState()
+  applySearchNow()
+})
 elements.sort.addEventListener("change", () => {
   state.sortDirection = defaultSortDirection(elements.sort.value)
 })
@@ -1421,4 +1491,7 @@ for (const input of [
   input.addEventListener("change", queueSearch)
 }
 
+restoreUrlState()
+renderSavedSearches()
+applySearchNow()
 loadFromCache()

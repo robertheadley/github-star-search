@@ -1,6 +1,6 @@
 {
   "name": "github-star-search",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Search GitHub starred repositories without cloning them.",
   "private": false,
   "type": "module",
@@ -8,14 +8,18 @@
     "github-star-search": "dist/index.js"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "tsc -p tsconfig.json && pnpm build:pages",
+    "build:pages": "tsc -p tsconfig.browser.json",
     "dev": "tsx src/index.ts",
-    "pages:check": "node --check docs/app.js",
+    "pages:check": "node --check docs/app.js && node --check docs/core.js",
+    "pages:smoke": "node scripts/deployed-smoke.mjs",
     "stars:sync": "tsx src/index.ts sync",
     "stars:search": "tsx src/index.ts search",
     "stars:code": "tsx src/index.ts code",
     "stars:export-dlc": "tsx src/index.ts export-dlc",
-    "check": "tsc -p tsconfig.json --noEmit"
+    "check": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.browser.json --noEmit",
+    "test": "tsx --test tests/*.test.ts",
+    "test:e2e": "playwright test"
   },
   "engines": {
     "node": ">=20"
@@ -25,9 +29,11 @@
     "yargs": "^17.7.2"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.10.2",
+    "@playwright/test": "^1.54.2",
     "@types/node": "^22.10.5",
     "@types/yargs": "^17.0.33",
-    "tsx": "^4.19.2",
+    "tsx": "^4.23.5",
     "typescript": "^5.7.2"
   }
 }

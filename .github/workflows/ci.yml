@@ -32,3 +32,18 @@ jobs:
 
       - name: Build
         run: pnpm build
+
+      - name: Unit tests
+        run: pnpm test
+
+      - name: Pages JavaScript check
+        run: pnpm pages:check
+
+      - name: Install Playwright browser
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Browser and accessibility smoke tests
+        run: pnpm test:e2e
+
+      - name: Deployed Pages smoke test
+        run: pnpm pages:smoke

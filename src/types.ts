@@ -21,6 +21,7 @@ export type StarredRepo = {
   starredAt: string | null
   hasReadme?: boolean
   hasLicense?: boolean
+  license?: string | null
 }
 
 export type StarRankLabel =
@@ -87,7 +88,7 @@ export type GitHubStarredRepoResponse = {
   created_at: string | null
   pushed_at: string | null
   updated_at: string | null
-  license?: unknown
+  license?: { spdx_id?: string | null; name?: string | null } | null
   owner: {
     login: string
   }

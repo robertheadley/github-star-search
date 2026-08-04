@@ -16,6 +16,14 @@ repositories without cloning thousands of repos.
 - Keeps large star lists responsive with debounced search, precomputed search
   fields, batched rendering, spreadsheet-style column filters, and on-demand
   correlation analysis.
+- Parses `topic:`, `language:`, `owner:`, and `license:` qualifiers, quoted
+  phrases, exclusions, and `OR` expressions through one shared TypeScript core.
+- Preserves query, filters, and sort in shareable URLs and supports named saved
+  searches in the browser.
+- Labels cache freshness, exposes stale-data refresh, confirms cache clearing,
+  and clears manually entered tokens immediately after use.
+- Exports either current results or the complete cache in a validated,
+  versioned JSON schema while still accepting legacy array exports.
 - Syncs your starred repositories from GitHub into a local cache.
 - Searches code remotely through GitHub's API, one starred repo at a time, so repositories do not need to be cloned.
 - Saves machine-readable JSON results for later filtering or import into other tools.
@@ -74,6 +82,22 @@ your starred repositories and suggests useful searches:
 Correlation suggestions stay local in the browser and their **Search** buttons
 load the matching query or topic filter.
 
+### Query language
+
+Search terms are combined with AND by default. Exact field qualifiers and
+quoted phrases can be mixed, excluded with `-`, or placed in alternatives with
+`OR`:
+
+```text
+topic:mcp language:TypeScript
+"command line" -archived
+owner:github OR license:MIT
+```
+
+Active qualifiers and exclusions appear as removable chips. Invalid filters or
+unterminated quotes produce an actionable message instead of silently returning
+misleading results.
+
 ### StarRank
 
 StarRank is an age-adjusted repository momentum score. It favors repositories
@@ -109,6 +133,9 @@ copy .env.example .env
 notepad .env
 pnpm build
 pnpm pages:check
+pnpm test
+pnpm test:e2e
+pnpm pages:smoke
 pnpm stars:sync
 pnpm stars:search "mcp"
 pnpm stars:code "createServer" -- --limit-repos 25
@@ -163,7 +190,9 @@ out/code-search-results.json
 
 ## Current status
 
-Static GitHub Pages app plus starter CLI scaffold. The next useful features are
-OAuth/device-flow sign-in, SQLite indexing for the CLI, resumable code search,
-rate-limit-aware queueing, and optional README/file-content sampling through
-GitHub Contents API.
+Version 0.2 provides a tested static GitHub Pages app plus the TypeScript CLI.
+CI type-checks and builds both surfaces, runs query/schema/ranking unit tests,
+executes Chromium workflow and accessibility smoke tests, validates Pages
+JavaScript, and checks the deployed site. The next release is focused on
+OAuth/device-flow sign-in, resumable rate-limit-aware synchronization, notes,
+collections, and repository detail views.

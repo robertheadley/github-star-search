@@ -89,3 +89,18 @@
 - event-loop lag: Search and column filters remain debounced by 140 ms; visible table rendering is batched to 100 rows initially.
 - validation: `pnpm pages:check`, `pnpm check`, `pnpm build`, local HTTP check, and browser interaction checks passed.
 - risks: This is a lightweight browser data table, not a full spreadsheet engine.
+
+## github-star-search-v02-query-core-20260804
+
+- timestamp: 2026-08-04T14:13:08-05:00
+- scenario: Search 8,000 prepared repositories with two legacy literal terms versus three parsed v0.2 filters (`topic:mcp language:TypeScript -archived`).
+- method: `node scripts/query-benchmark.mjs`; 100 iterations after generating a deterministic repository set.
+- environment: Windows 11, Node.js 22-compatible runtime, local repository checkout.
+- startup time: Not affected; the browser core remains a small static ES module.
+- latency: Legacy literal matching averaged 0.69 ms (p95 1.36 ms); parsed field-aware matching averaged 1.39 ms (p95 2.10 ms).
+- job duration: Benchmark process completed in about 0.2 seconds after the build.
+- memory: Parsed queries store a small clause/group structure; repository preparation remains unchanged.
+- CPU: Field-aware correctness adds about 0.70 ms average for 8,000 repositories in this scenario.
+- event-loop lag: Search remains behind the existing 140 ms debounce and measured work stayed below 2.1 ms at p95.
+- validation: Reproducible benchmark script is committed; unit and Chromium suites exercise operator correctness separately.
+- risks: Exact timings vary by machine; the comparison intentionally uses different semantics because the legacy path could not perform field-aware filtering.

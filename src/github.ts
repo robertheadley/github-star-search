@@ -77,6 +77,7 @@ export class GitHubClient {
           starredAt: null,
           hasReadme: false,
           hasLicense: Boolean(repo.license),
+          license: repo.license?.spdx_id || repo.license?.name || null,
         })
       }
       nextUrl = next

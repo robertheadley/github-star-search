@@ -134,6 +134,29 @@ h2 {
   white-space: nowrap;
 }
 
+.status-group,
+.example-actions,
+.saved-searches,
+.active-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.status-pill.fresh { background: #dcfce7; color: #166534; }
+.status-pill.aging { background: #fef3c7; color: #92400e; }
+.status-pill.stale { background: #fee2e2; color: #991b1b; }
+
+.privacy-note,
+.help-copy {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.privacy-note { margin: 12px 0 0; }
+.centered { margin-top: 8px; text-align: center; }
+
 label {
   display: grid;
   gap: 6px;
@@ -208,6 +231,41 @@ button:focus-visible,
 .toolbar {
   margin-top: 16px;
 }
+
+.query-help {
+  margin-top: 14px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-strong);
+}
+
+.query-help summary { cursor: pointer; color: var(--text); font-weight: 800; }
+.query-help p { margin: 10px 0; }
+.query-example { width: auto; min-height: 34px; padding: 6px 10px; }
+
+.active-filters { margin-top: 10px; }
+.filter-chip {
+  min-height: 30px;
+  width: auto;
+  padding: 4px 9px;
+  border-radius: 999px;
+  background: #e5f3f1;
+  color: var(--accent-strong);
+  font-size: 0.82rem;
+}
+
+.query-error {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: #fee2e2;
+  color: #991b1b;
+  font-weight: 700;
+}
+
+.saved-searches { margin-top: 14px; align-items: end; }
+.saved-searches label { min-width: min(100%, 260px); }
 
 button,
 .import-button {
